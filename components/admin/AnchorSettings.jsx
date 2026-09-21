@@ -106,8 +106,8 @@ export default function AnchorSettings({ settings, onUpdate }) {
           Charged only when a customer sends foreign currency and wants TSh. Expressed as "X TL worth of TSh",
           so it automatically scales if the anchor above changes.
         </p>
-        <div className="flex items-end gap-4">
-          <div className="max-w-xs">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
+          <div className="w-full sm:w-auto sm:max-w-xs">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
               Commission (TL)
             </label>
@@ -120,7 +120,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
             />
             <p className="text-xs text-slate-400 mt-1">Default: 100</p>
           </div>
-          <p className="text-sm text-slate-500 pb-2.5">
+          <p className="text-sm text-slate-500 sm:pb-2.5">
             = <span className="font-semibold text-slate-900 dark:text-white">{formatAmount(commissionTsh, 'TZS')}</span> at the current anchor
           </p>
         </div>
@@ -184,12 +184,12 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
       {/* External Rates */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
           <h3 className="font-bold text-slate-900 dark:text-white">External Reference Rates</h3>
           <button
             onClick={handleRefreshRates}
             disabled={refreshing}
-            className="text-xs px-3 py-1.5 bg-gradient-to-r from-gold-400 to-gold-600 text-brand-950 rounded-lg hover:from-gold-500 hover:to-gold-700 transition-colors disabled:opacity-60"
+            className="shrink-0 text-xs px-3 py-1.5 bg-gradient-to-r from-gold-400 to-gold-600 text-brand-950 rounded-lg hover:from-gold-500 hover:to-gold-700 transition-colors disabled:opacity-60"
           >
             {refreshing ? 'Refreshing…' : 'Refresh Now'}
           </button>
@@ -211,7 +211,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
           <p className="text-sm text-amber-600 dark:text-amber-400">Rates not set yet — click "Refresh Now".</p>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
               {['USD', 'EUR', 'GBP'].map((c) => (
                 <div key={c} className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3">
                   <p className="text-xs font-semibold text-slate-500 mb-1">{c}</p>

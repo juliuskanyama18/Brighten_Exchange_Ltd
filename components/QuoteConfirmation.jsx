@@ -90,19 +90,19 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
 
         {/* Summary card */}
         <div className="bg-gradient-to-br from-brand-800 to-brand-950 border border-gold-500/30 rounded-2xl p-6 text-white">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-4 sm:gap-2">
             {/* Send side */}
-            <div className="text-center">
+            <div className="text-center min-w-0 w-full sm:w-auto">
               <p className="text-gold-300 text-xs uppercase tracking-wide mb-1">You Send</p>
-              <p className="text-3xl font-bold">{formatAmount(sendAmount, fromCurrency)}</p>
+              <p className="text-2xl sm:text-3xl font-bold break-words">{formatAmount(sendAmount, fromCurrency)}</p>
               <p className="text-gold-300 text-sm mt-1">
                 {currencyFlag(fromCurrency)} {currencyDisplayLabel(fromCurrency)}
               </p>
             </div>
 
             {/* Arrow */}
-            <div className="flex flex-col items-center">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+            <div className="flex sm:flex-col items-center justify-center shrink-0">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center rotate-90 sm:rotate-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
@@ -110,9 +110,9 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
             </div>
 
             {/* Receive side */}
-            <div className="text-center">
+            <div className="text-center min-w-0 w-full sm:w-auto">
               <p className="text-gold-300 text-xs uppercase tracking-wide mb-1">You Receive</p>
-              <p className="text-3xl font-bold">{formatAmount(receiveAmount, toCurrency)}</p>
+              <p className="text-2xl sm:text-3xl font-bold break-words">{formatAmount(receiveAmount, toCurrency)}</p>
               <p className="text-gold-300 text-sm mt-1">
                 {currencyFlag(toCurrency)} {currencyDisplayLabel(toCurrency)}
               </p>

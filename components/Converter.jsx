@@ -240,18 +240,18 @@ export default function Converter({ paymentDetails }) {
                   return (
                     <div
                       key={c}
-                      className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4"
+                      className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4"
                     >
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-xs text-slate-400">{currencyFlag(c)} {c}</p>
-                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 break-words">
                           {amount !== null && amount !== undefined ? formatAmount(amount, c) : '—'}
                         </p>
                       </div>
                       <button
                         onClick={() => handleGetQuoteSend(c)}
                         disabled={amount === null || amount === undefined}
-                        className="px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 text-brand-950 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="shrink-0 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 text-brand-950 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Get Quote →
                       </button>
@@ -277,7 +277,7 @@ export default function Converter({ paymentDetails }) {
             </label>
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
               <div className="flex items-center gap-3">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <input
                     type="text"
                     inputMode="decimal"
@@ -287,7 +287,7 @@ export default function Converter({ paymentDetails }) {
                     className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
                   />
                 </div>
-                <div className="w-36">
+                <div className="w-32 sm:w-36 shrink-0">
                   <CurrencySelector
                     value={wantCurrency}
                     onChange={setWantCurrency}

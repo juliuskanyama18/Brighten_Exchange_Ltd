@@ -44,10 +44,10 @@ function CopyButton({ text }) {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between py-2.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+    <div className="flex flex-wrap items-center justify-between gap-y-1 py-2.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
       <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-slate-900 dark:text-white">{value}</span>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm font-semibold text-slate-900 dark:text-white break-all">{value}</span>
         <CopyButton text={value} />
       </div>
     </div>
