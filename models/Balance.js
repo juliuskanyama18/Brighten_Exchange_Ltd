@@ -24,6 +24,7 @@ BalanceSchema.statics.seedDefaults = async function () {
   const defaults = [
     { currency: 'TZS', account: 'NMB'    },
     { currency: 'TZS', account: 'Airtel' },
+    { currency: 'TZS', account: 'Selcom' },
     { currency: 'TRY', account: 'Main'   },
     { currency: 'USD', account: 'Main'   },
     { currency: 'GBP', account: 'Main'   },

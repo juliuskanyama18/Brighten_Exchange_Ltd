@@ -9,7 +9,7 @@ import { calculateTshToOne, calculateForeignToTsh, parseAmount, QuoteError } fro
 
 export const dynamic = 'force-dynamic';
 
-const PAYMENT_METHODS = ['NMB', 'Airtel', 'Bank', 'Cash', 'Other'];
+const PAYMENT_METHODS = ['NMB', 'Airtel', 'Selcom', 'Bank', 'Cash', 'Other'];
 
 // Business-facing currency label ('TL') <-> DB/ISO-style code ('TRY')
 const BUSINESS_TO_DB = { TL: 'TRY', USD: 'USD', EUR: 'EUR', GBP: 'GBP' };

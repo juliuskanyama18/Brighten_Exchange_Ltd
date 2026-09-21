@@ -57,14 +57,16 @@ function DetailRow({ label, value }) {
 export default function PaymentDetails({ paymentDetails, sendAmount, sendCurrency, reference, onMethodChange }) {
   const [activeTab, setActiveTab] = useState('nmb');
 
+  const METHOD_BY_TAB = { nmb: 'NMB', airtel: 'Airtel', selcom: 'Selcom' };
+
   const selectTab = (tab) => {
     setActiveTab(tab);
-    onMethodChange?.(tab === 'nmb' ? 'NMB' : 'Airtel');
+    onMethodChange?.(METHOD_BY_TAB[tab]);
   };
 
   if (!paymentDetails) return null;
 
-  const { nmb, airtel } = paymentDetails;
+  const { nmb, airtel, selcom } = paymentDetails;
   const amountDisplay = formatAmount(sendAmount, sendCurrency);
 
   return (
@@ -86,26 +88,36 @@ export default function PaymentDetails({ paymentDetails, sendAmount, sendCurrenc
       </div>
 
       {/* Tab selector */}
-      <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-4">
+      <div className="flex flex-wrap bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-4 gap-1">
         <button
           onClick={() => selectTab('nmb')}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+          className={`flex-1 min-w-0 py-2 px-1 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 truncate ${
             activeTab === 'nmb'
               ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
-          🏦 NMB Bank
+          🏦 NMB
         </button>
         <button
           onClick={() => selectTab('airtel')}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+          className={`flex-1 min-w-0 py-2 px-1 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 truncate ${
             activeTab === 'airtel'
               ? 'bg-white dark:bg-slate-700 text-red-600 dark:text-red-400 shadow-sm'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
-          📱 Airtel Money
+          📱 Airtel
+        </button>
+        <button
+          onClick={() => selectTab('selcom')}
+          className={`flex-1 min-w-0 py-2 px-1 text-xs sm:text-sm font-semibold rounded-lg transition-all duration-200 truncate ${
+            activeTab === 'selcom'
+              ? 'bg-white dark:bg-slate-700 text-orange-600 dark:text-orange-400 shadow-sm'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+          }`}
+        >
+          💰 Selcom
         </button>
       </div>
 
@@ -137,6 +149,22 @@ export default function PaymentDetails({ paymentDetails, sendAmount, sendCurrenc
           </div>
           <DetailRow label="Phone Number"  value={airtel.phone} />
           <DetailRow label="Account Name"  value={airtel.accountName} />
+          <DetailRow label="Amount to Send" value={amountDisplay} />
+        </div>
+      )}
+
+      {/* Selcom Details */}
+      {activeTab === 'selcom' && selcom && (
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 animate-fade-in">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">S</div>
+            <div>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">Selcom</p>
+              <p className="text-xs text-slate-500">Mobile Payment</p>
+            </div>
+          </div>
+          <DetailRow label="Selcom Number" value={selcom.number} />
+          <DetailRow label="Account Name"  value={selcom.accountName} />
           <DetailRow label="Amount to Send" value={amountDisplay} />
         </div>
       )}

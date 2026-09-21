@@ -10,11 +10,13 @@ async function getPaymentDetails() {
     const settings = await Settings.getSettings();
     const nmb = settings.paymentDetails?.nmb;
     const airtel = settings.paymentDetails?.airtel;
+    const selcom = settings.paymentDetails?.selcom;
     // Mongoose subdocuments aren't plain objects — extract primitive fields
     // explicitly so this can safely cross the Server->Client Component boundary.
     return {
       nmb:    nmb    ? { accountName: nmb.accountName, accountNumber: nmb.accountNumber } : null,
       airtel: airtel ? { phone: airtel.phone, accountName: airtel.accountName } : null,
+      selcom: selcom ? { number: selcom.number, accountName: selcom.accountName } : null,
       whatsappNumber: settings.whatsappNumber || '',
     };
   } catch {
@@ -22,6 +24,7 @@ async function getPaymentDetails() {
     return {
       nmb:    { accountName: 'JULIUS GODWIN KANYAMA', accountNumber: '22210027343' },
       airtel: { phone: '+255782025468', accountName: 'JULIUS GODWIN KANYAMA' },
+      selcom: { number: '', accountName: 'JULIUS GODWIN KANYAMA' },
       whatsappNumber: '',
     };
   }
@@ -137,7 +140,7 @@ export default async function HomePage() {
             {[
               { step: '01', title: 'Enter Amount',    desc: 'Select currencies and enter the amount you want to send.',     icon: '💱' },
               { step: '02', title: 'Confirm Quote',   desc: 'Review your quote and confirm the estimate before proceeding.', icon: '✅' },
-              { step: '03', title: 'Send & Receive',  desc: 'Pay via NMB or Airtel Money. We process your exchange fast.',  icon: '🚀' },
+              { step: '03', title: 'Send & Receive',  desc: 'Pay via NMB, Airtel Money or Selcom. We process your exchange fast.',  icon: '🚀' },
             ].map((item) => (
               <div key={item.step} className="bg-white/5 border border-gold-500/10 rounded-2xl p-6 text-center hover:bg-white/10 hover:border-gold-500/30 transition-colors">
                 <div className="text-3xl mb-3">{item.icon}</div>

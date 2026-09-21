@@ -36,6 +36,10 @@ const SettingsSchema = new mongoose.Schema({
       phone:       { type: String, default: '+255782025468' },
       accountName: { type: String, default: 'JULIUS GODWIN KANYAMA' },
     },
+    selcom: {
+      number:      { type: String, default: '' }, // Selcom merchant/till number or wallet number
+      accountName: { type: String, default: 'JULIUS GODWIN KANYAMA' },
+    },
   },
 
   displayName: { type: String, default: 'Brighten Exchange Ltd' },

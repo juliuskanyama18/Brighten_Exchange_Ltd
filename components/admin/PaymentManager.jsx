@@ -14,6 +14,10 @@ export default function PaymentManager({ settings, onUpdate }) {
       phone:       pd.airtel?.phone       || '+255782025468',
       accountName: pd.airtel?.accountName || 'JULIUS GODWIN KANYAMA',
     },
+    selcom: {
+      number:      pd.selcom?.number      || '',
+      accountName: pd.selcom?.accountName || 'JULIUS GODWIN KANYAMA',
+    },
     displayName: settings?.displayName || 'Brighten Exchange Ltd',
   });
   const [saving, setSaving] = useState(false);
@@ -23,7 +27,7 @@ export default function PaymentManager({ settings, onUpdate }) {
     setSaving(true);
     try {
       const { data } = await axios.patch('/api/admin/settings', {
-        paymentDetails: { nmb: form.nmb, airtel: form.airtel },
+        paymentDetails: { nmb: form.nmb, airtel: form.airtel, selcom: form.selcom },
         displayName: form.displayName,
       });
       if (data.success) {
@@ -94,6 +98,33 @@ export default function PaymentManager({ settings, onUpdate }) {
             <input
               value={form.airtel.accountName}
               onChange={(e) => setForm({ ...form, airtel: { ...form.airtel, accountName: e.target.value } })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Selcom */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center text-white font-bold text-sm">S</div>
+          <h3 className="font-bold text-slate-900 dark:text-white">Selcom Details</h3>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Selcom Number</label>
+            <input
+              value={form.selcom.number}
+              onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, number: e.target.value } })}
+              placeholder="Merchant / till / wallet number"
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Account Name</label>
+            <input
+              value={form.selcom.accountName}
+              onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, accountName: e.target.value } })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
           </div>

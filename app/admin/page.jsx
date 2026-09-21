@@ -168,6 +168,10 @@ export default function AdminDashboard() {
                       <span className="font-mono font-semibold text-slate-900 dark:text-white text-xs">{settings.paymentDetails?.airtel?.phone}</span>
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-slate-500">Selcom</span>
+                      <span className="font-mono font-semibold text-slate-900 dark:text-white text-xs">{settings.paymentDetails?.selcom?.number || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-slate-500">WhatsApp</span>
                       <span className="font-mono font-semibold text-slate-900 dark:text-white text-xs">{settings.whatsappNumber || '—'}</span>
                     </div>
