@@ -26,6 +26,34 @@ export function formatAmount(amount, currency = '', compact = false) {
   }).format(amount);
 }
 
+/**
+ * Live-format a number as the user types into an input, inserting thousand
+ * separators (e.g. "1000000" -> "1,000,000", "1250.5" -> "1,250.5").
+ * Keeps at most one decimal point and up to 2 decimal digits. Returns the
+ * cleaned/formatted string — safe to feed back into a controlled input's
+ * value. Strip commas again (e.g. via parseAmount on the backend) before
+ * doing math with the result.
+ */
+export function formatNumberInput(rawValue) {
+  if (rawValue === '') return '';
+
+  let cleaned = rawValue.replace(/[^\d.]/g, '');
+
+  const firstDot = cleaned.indexOf('.');
+  if (firstDot !== -1) {
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+  }
+
+  let [intPart, decPart] = cleaned.split('.');
+  intPart = (intPart || '').replace(/^0+(?=\d)/, '');
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  if (decPart !== undefined) {
+    return `${withCommas}.${decPart.slice(0, 2)}`;
+  }
+  return withCommas;
+}
+
 export function currencyFlag(currency) {
   const flags = {
     TZS: '🇹🇿',

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import CurrencySelector from './CurrencySelector';
 import QuoteConfirmation from './QuoteConfirmation';
-import { formatAmount, currencyFlag, currencyDisplayLabel } from '@/utils/formatting';
+import { formatAmount, currencyFlag, currencyDisplayLabel, formatNumberInput } from '@/utils/formatting';
 
 const FOREIGN_CURRENCIES = ['TL', 'USD', 'EUR', 'GBP'];
 
@@ -210,7 +210,7 @@ export default function Converter({ paymentDetails }) {
                     type="text"
                     inputMode="decimal"
                     value={tshAmount}
-                    onChange={(e) => setTshAmount(e.target.value)}
+                    onChange={(e) => setTshAmount(formatNumberInput(e.target.value))}
                     placeholder="0"
                     className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
                   />
@@ -282,7 +282,7 @@ export default function Converter({ paymentDetails }) {
                     type="text"
                     inputMode="decimal"
                     value={wantAmount}
-                    onChange={(e) => setWantAmount(e.target.value)}
+                    onChange={(e) => setWantAmount(formatNumberInput(e.target.value))}
                     placeholder="0.00"
                     className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
                   />
