@@ -169,7 +169,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Selcom</span>
-                      <span className="font-mono font-semibold text-slate-900 dark:text-white text-xs">{settings.paymentDetails?.selcom?.number || '—'}</span>
+                      <span className="font-mono font-semibold text-slate-900 dark:text-white text-xs">{settings.paymentDetails?.selcom?.accountNumber || '—'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">WhatsApp</span>

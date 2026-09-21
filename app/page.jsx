@@ -16,7 +16,10 @@ async function getPaymentDetails() {
     return {
       nmb:    nmb    ? { accountName: nmb.accountName, accountNumber: nmb.accountNumber } : null,
       airtel: airtel ? { phone: airtel.phone, accountName: airtel.accountName } : null,
-      selcom: selcom ? { number: selcom.number, accountName: selcom.accountName } : null,
+      selcom: selcom ? {
+        bankName: selcom.bankName, accountName: selcom.accountName,
+        accountNumber: selcom.accountNumber, swiftCode: selcom.swiftCode,
+      } : null,
       whatsappNumber: settings.whatsappNumber || '',
     };
   } catch {
@@ -24,7 +27,12 @@ async function getPaymentDetails() {
     return {
       nmb:    { accountName: 'JULIUS GODWIN KANYAMA', accountNumber: '22210027343' },
       airtel: { phone: '+255782025468', accountName: 'JULIUS GODWIN KANYAMA' },
-      selcom: { number: '', accountName: 'JULIUS GODWIN KANYAMA' },
+      selcom: {
+        bankName: 'Selcom Microfinance Bank Tanzania Limited',
+        accountName: 'JULIUS GODWIN KANYAMA',
+        accountNumber: '5525110455178',
+        swiftCode: 'ACTZTZTZ',
+      },
       whatsappNumber: '',
     };
   }

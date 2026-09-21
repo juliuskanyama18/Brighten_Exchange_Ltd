@@ -15,8 +15,10 @@ export default function PaymentManager({ settings, onUpdate }) {
       accountName: pd.airtel?.accountName || 'JULIUS GODWIN KANYAMA',
     },
     selcom: {
-      number:      pd.selcom?.number      || '',
-      accountName: pd.selcom?.accountName || 'JULIUS GODWIN KANYAMA',
+      bankName:      pd.selcom?.bankName      || 'Selcom Microfinance Bank Tanzania Limited',
+      accountName:   pd.selcom?.accountName   || 'JULIUS GODWIN KANYAMA',
+      accountNumber: pd.selcom?.accountNumber || '5525110455178',
+      swiftCode:     pd.selcom?.swiftCode     || 'ACTZTZTZ',
     },
     displayName: settings?.displayName || 'Brighten Exchange Ltd',
   });
@@ -108,16 +110,15 @@ export default function PaymentManager({ settings, onUpdate }) {
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 bg-orange-500 rounded-xl flex items-center justify-center text-white font-bold text-sm">S</div>
-          <h3 className="font-bold text-slate-900 dark:text-white">Selcom Details</h3>
+          <h3 className="font-bold text-slate-900 dark:text-white">Selcom Pesa Details</h3>
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Selcom Number</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Bank Name</label>
             <input
-              value={form.selcom.number}
-              onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, number: e.target.value } })}
-              placeholder="Merchant / till / wallet number"
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-gold-500"
+              value={form.selcom.bankName}
+              onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, bankName: e.target.value } })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
           </div>
           <div>
@@ -126,6 +127,22 @@ export default function PaymentManager({ settings, onUpdate }) {
               value={form.selcom.accountName}
               onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, accountName: e.target.value } })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Account Number</label>
+            <input
+              value={form.selcom.accountNumber}
+              onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, accountNumber: e.target.value } })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">SWIFT Code</label>
+            <input
+              value={form.selcom.swiftCode}
+              onChange={(e) => setForm({ ...form, selcom: { ...form.selcom, swiftCode: e.target.value } })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
           </div>
         </div>

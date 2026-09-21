@@ -159,12 +159,14 @@ export default function PaymentDetails({ paymentDetails, sendAmount, sendCurrenc
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-sm font-bold">S</div>
             <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-white">Selcom</p>
-              <p className="text-xs text-slate-500">Mobile Payment</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">Selcom Pesa</p>
+              <p className="text-xs text-slate-500">Bank Transfer</p>
             </div>
           </div>
-          <DetailRow label="Selcom Number" value={selcom.number} />
-          <DetailRow label="Account Name"  value={selcom.accountName} />
+          <DetailRow label="Bank Name"      value={selcom.bankName} />
+          <DetailRow label="Account Name"   value={selcom.accountName} />
+          <DetailRow label="Account Number" value={selcom.accountNumber} />
+          <DetailRow label="SWIFT Code"     value={selcom.swiftCode} />
           <DetailRow label="Amount to Send" value={amountDisplay} />
         </div>
       )}

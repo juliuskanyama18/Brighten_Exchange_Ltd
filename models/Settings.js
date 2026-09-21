@@ -37,8 +37,11 @@ const SettingsSchema = new mongoose.Schema({
       accountName: { type: String, default: 'JULIUS GODWIN KANYAMA' },
     },
     selcom: {
-      number:      { type: String, default: '' }, // Selcom merchant/till number or wallet number
-      accountName: { type: String, default: 'JULIUS GODWIN KANYAMA' },
+      // Selcom Pesa is a full bank rail (Selcom Microfinance Bank Tanzania), not a mobile wallet
+      bankName:      { type: String, default: 'Selcom Microfinance Bank Tanzania Limited' },
+      accountName:   { type: String, default: 'JULIUS GODWIN KANYAMA' },
+      accountNumber: { type: String, default: '5525110455178' },
+      swiftCode:     { type: String, default: 'ACTZTZTZ' },
     },
   },
 
