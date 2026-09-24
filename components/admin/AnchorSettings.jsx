@@ -8,6 +8,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
   const [form, setForm] = useState({
     buyMarginPercent: settings?.buyMarginPercent ?? 5,
     marginTlTsh:      settings?.marginTlTsh      ?? 5,
+    deliveryFeeTl:    settings?.deliveryFeeTl    ?? 300,
     whatsappNumber:   settings?.whatsappNumber   ?? '',
   });
   const [saving, setSaving] = useState(false);
@@ -33,8 +34,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   const buyMarginPercentNum = Number(form.buyMarginPercent);
   const marginTlTshNum      = Number(form.marginTlTsh);
+  const deliveryFeeTlNum    = Number(form.deliveryFeeTl);
   const buyMarginValid = Number.isFinite(buyMarginPercentNum) && buyMarginPercentNum >= 0 && buyMarginPercentNum < 100;
   const marginTlTshValid = Number.isFinite(marginTlTshNum) && marginTlTshNum >= 0;
+  const deliveryFeeTlValid = Number.isFinite(deliveryFeeTlNum) && deliveryFeeTlNum >= 0;
 
   const tlReference = rates?.rates?.TRY?.tzsPerUnit ?? null;
   const referenceRate = (currency) => {
@@ -78,6 +81,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
       setSaveError('TL sell margin must be a number of at least 0.');
       return;
     }
+    if (!deliveryFeeTlValid) {
+      setSaveError('Delivery fee must be a number of at least 0.');
+      return;
+    }
 
     setSaveError('');
     setSaving(true);
@@ -85,6 +92,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
       const { data } = await axios.put('/api/admin/settings', {
         buyMarginPercent: buyMarginPercentNum,
         marginTlTsh:      marginTlTshNum,
+        deliveryFeeTl:    deliveryFeeTlNum,
         whatsappNumber:   form.whatsappNumber.trim(),
       });
       if (data.success) {
@@ -191,6 +199,29 @@ export default function AnchorSettings({ settings, onUpdate }) {
               No rates fetched yet — click "Refresh Now" below to populate this preview.
             </p>
           )}
+        </div>
+      </div>
+
+      {/* Delivery Fee */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Delivery Fee</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          Optional, opt-in per transaction — the client (or exchanger, on their behalf) checks "needs delivery" in
+          the calculator. This flat TL amount is converted into whatever currency the client is receiving (at the
+          live reference rate, no margin) and deducted from it.
+        </p>
+        <div className="max-w-xs">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+            Delivery Fee (TL)
+          </label>
+          <input
+            type="number"
+            step="10"
+            value={form.deliveryFeeTl}
+            onChange={(e) => setForm({ ...form, deliveryFeeTl: e.target.value })}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
+          />
+          <p className="text-xs text-slate-400 mt-1">Default: 300</p>
         </div>
       </div>
 

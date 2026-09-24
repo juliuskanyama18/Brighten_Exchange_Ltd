@@ -27,21 +27,41 @@ function RatesFooter({ ratesInfo }) {
   );
 }
 
+// This interface is used by BOTH the client (self-service) and the exchanger
+// (operating it on the client's behalf during an in-person transaction) — so
+// labels always name the role ("Client Sends" / "Exchanger Gives") instead of
+// "I"/"You", which would mean different things depending on who's typing.
+function DeliveryCheckbox({ checked, onChange, feeTl }) {
+  return (
+    <label className="flex items-center gap-2 px-1 text-sm text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-gold-500 focus:ring-gold-500"
+      />
+      Client needs delivery {feeTl ? `(−${feeTl} TL worth deducted)` : ''}
+    </label>
+  );
+}
+
 export default function Converter({ paymentDetails }) {
-  const [tab, setTab] = useState('send'); // 'send' = I send TSh, 'want' = I want TSh
+  const [tab, setTab] = useState('send'); // 'send' = client sends TSh, 'want' = client wants TSh
   const [ratesInfo, setRatesInfo] = useState(null);
   const [quote, setQuote] = useState(null);
+  const [needsDelivery, setNeedsDelivery] = useState(false);
+  const [deliveryFeeTl, setDeliveryFeeTl] = useState(null);
 
-  // ---- Tab 1: I send TSh ----
+  // ---- Tab 1: Client sends TSh ----
   const [tshAmount, setTshAmount] = useState('');
-  const [sendResults, setSendResults] = useState(null); // { TL, USD, EUR, GBP }
+  const [sendQuote, setSendQuote] = useState(null); // full /api/quote response
   const [sendLoading, setSendLoading] = useState(false);
   const [sendError, setSendError] = useState('');
 
-  // ---- Tab 2: I want TSh ----
+  // ---- Tab 2: Client wants TSh ----
   const [wantCurrency, setWantCurrency] = useState('USD');
   const [wantAmount, setWantAmount] = useState('');
-  const [wantResult, setWantResult] = useState(null); // { finalTsh, buyRate }
+  const [wantResult, setWantResult] = useState(null); // full /api/quote response
   const [wantLoading, setWantLoading] = useState(false);
   const [wantError, setWantError] = useState('');
 
@@ -55,35 +75,36 @@ export default function Converter({ paymentDetails }) {
           isCached: data.isCached,
           lastFetchedAt: data.lastFetchedAt,
         });
+        setDeliveryFeeTl(data.deliveryFeeTl);
       }
     }).catch(() => {});
   }, []);
 
-  const fetchSendQuote = useCallback(async (amount) => {
+  const fetchSendQuote = useCallback(async (amount, delivery) => {
     const clean = amount.replace(/,/g, '');
     if (!clean || parseFloat(clean) <= 0) {
-      setSendResults(null);
+      setSendQuote(null);
       return;
     }
     setSendLoading(true);
     setSendError('');
     try {
-      const { data } = await axios.post('/api/quote', { direction: 'send_tsh', amount: clean });
+      const { data } = await axios.post('/api/quote', { direction: 'send_tsh', amount: clean, needsDelivery: delivery });
       if (data.success) {
-        setSendResults(data.results);
+        setSendQuote(data);
       } else {
         setSendError(data.error || 'Could not calculate quote');
-        setSendResults(null);
+        setSendQuote(null);
       }
     } catch (err) {
       setSendError(err.response?.data?.error || 'Could not get rate. Check connection.');
-      setSendResults(null);
+      setSendQuote(null);
     } finally {
       setSendLoading(false);
     }
   }, []);
 
-  const fetchWantQuote = useCallback(async (currency, amount) => {
+  const fetchWantQuote = useCallback(async (currency, amount, delivery) => {
     const clean = amount.replace(/,/g, '');
     if (!clean || parseFloat(clean) <= 0) {
       setWantResult(null);
@@ -92,7 +113,7 @@ export default function Converter({ paymentDetails }) {
     setWantLoading(true);
     setWantError('');
     try {
-      const { data } = await axios.post('/api/quote', { direction: 'want_tsh', currency, amount: clean });
+      const { data } = await axios.post('/api/quote', { direction: 'want_tsh', currency, amount: clean, needsDelivery: delivery });
       if (data.success) {
         setWantResult(data);
       } else {
@@ -110,12 +131,12 @@ export default function Converter({ paymentDetails }) {
   useEffect(() => {
     clearTimeout(debounceRef.current);
     if (tab === 'send') {
-      debounceRef.current = setTimeout(() => fetchSendQuote(tshAmount), 500);
+      debounceRef.current = setTimeout(() => fetchSendQuote(tshAmount, needsDelivery), 500);
     } else {
-      debounceRef.current = setTimeout(() => fetchWantQuote(wantCurrency, wantAmount), 500);
+      debounceRef.current = setTimeout(() => fetchWantQuote(wantCurrency, wantAmount, needsDelivery), 500);
     }
     return () => clearTimeout(debounceRef.current);
-  }, [tab, tshAmount, wantCurrency, wantAmount, fetchSendQuote, fetchWantQuote]);
+  }, [tab, tshAmount, wantCurrency, wantAmount, needsDelivery, fetchSendQuote, fetchWantQuote]);
 
   const handleSwitchTab = (next) => {
     setTab(next);
@@ -124,16 +145,20 @@ export default function Converter({ paymentDetails }) {
   };
 
   const handleGetQuoteSend = (currency) => {
-    const amount = sendResults?.[currency];
-    if (amount === null || amount === undefined) return;
+    const netAmount = sendQuote?.results?.[currency];
+    if (netAmount === null || netAmount === undefined) return;
+    const grossAmount = (sendQuote.grossResults ?? sendQuote.results)[currency];
     const tshAmountNum = parseFloat(tshAmount.replace(/,/g, ''));
     setQuote({
       direction: 'send_tsh',
       fromCurrency: 'TZS',
       toCurrency: currency,
       sendAmount: tshAmountNum,
-      receiveAmount: amount,
-      rateUsed: tshAmountNum / amount, // sellRate, by definition of amount = tshAmount / sellRate
+      receiveAmount: netAmount,
+      rateUsed: tshAmountNum / grossAmount, // pure sell rate, unaffected by delivery fee
+      needsDelivery: sendQuote.needsDelivery,
+      grossAmount,
+      deliveryFeeAmount: sendQuote.deliveryFees?.[currency] ?? 0,
     });
   };
 
@@ -146,13 +171,16 @@ export default function Converter({ paymentDetails }) {
       sendAmount: parseFloat(wantAmount.replace(/,/g, '')),
       receiveAmount: wantResult.finalTsh,
       rateUsed: wantResult.buyRate,
+      needsDelivery: wantResult.needsDelivery,
+      grossAmount: wantResult.grossTsh ?? wantResult.finalTsh,
+      deliveryFeeAmount: wantResult.deliveryFeeTsh ?? 0,
     });
   };
 
   const handleReset = () => {
     setQuote(null);
     setTshAmount('');
-    setSendResults(null);
+    setSendQuote(null);
     setWantAmount('');
     setWantResult(null);
   };
@@ -180,7 +208,7 @@ export default function Converter({ paymentDetails }) {
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
-          I Send TSh
+          Client Sends TSh
         </button>
         <button
           onClick={() => handleSwitchTab('want')}
@@ -190,21 +218,21 @@ export default function Converter({ paymentDetails }) {
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
-          I Want TSh
+          Client Wants TSh
         </button>
       </div>
       <p className="text-center text-xs text-slate-500 dark:text-slate-400 -mt-2">
         {tab === 'send'
-          ? 'You have Tanzanian Shillings and want TL, USD, EUR or GBP'
-          : 'You have TL, USD, EUR or GBP and want Tanzanian Shillings'}
+          ? 'Client has Tanzanian Shillings, exchanger gives TL, USD, EUR or GBP'
+          : 'Client has TL, USD, EUR or GBP, exchanger gives Tanzanian Shillings'}
       </p>
 
       {tab === 'send' ? (
         <div className="space-y-5">
-          {/* You Send */}
+          {/* Client Sends */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              You Send
+              Client Sends
             </label>
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
               <div className="flex items-center gap-3">
@@ -223,10 +251,12 @@ export default function Converter({ paymentDetails }) {
             </div>
           </div>
 
-          {/* You Receive — all four at once */}
+          <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
+
+          {/* Exchanger Gives — all four at once */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              You Will Receive
+              Exchanger Gives
             </label>
             {sendLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
@@ -239,7 +269,7 @@ export default function Converter({ paymentDetails }) {
             ) : (
               <div className="space-y-2">
                 {FOREIGN_CURRENCIES.map((c) => {
-                  const amount = sendResults?.[c];
+                  const amount = sendQuote?.results?.[c];
                   return (
                     <div
                       key={c}
@@ -273,10 +303,10 @@ export default function Converter({ paymentDetails }) {
         </div>
       ) : (
         <div className="space-y-5">
-          {/* You Send (foreign currency) */}
+          {/* Client Sends (foreign currency) */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              You Send
+              Client Sends
             </label>
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
               <div className="flex items-center gap-3">
@@ -301,10 +331,12 @@ export default function Converter({ paymentDetails }) {
             </div>
           </div>
 
-          {/* Breakdown */}
+          <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
+
+          {/* Exchanger Gives */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              You Will Receive
+              Exchanger Gives
             </label>
             {wantLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
@@ -322,9 +354,21 @@ export default function Converter({ paymentDetails }) {
                     1 {currencyDisplayLabel(wantCurrency)} = {formatAmount(wantResult.buyRate, 'TZS')}
                   </span>
                 </div>
+                {wantResult.needsDelivery && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Gross</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">{formatAmount(wantResult.grossTsh, 'TZS')}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">− Delivery fee</span>
+                      <span className="font-semibold text-red-500">−{formatAmount(wantResult.deliveryFeeTsh, 'TZS')}</span>
+                    </div>
+                  </>
+                )}
                 <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
                 <div className="flex justify-between">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">You receive</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Exchanger gives</span>
                   <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatAmount(wantResult.finalTsh, 'TZS')}</span>
                 </div>
               </div>

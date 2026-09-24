@@ -16,6 +16,13 @@ const SettingsSchema = new mongoose.Schema({
   buyMarginPercent: { type: Number, default: 5, min: 0, max: 99 }, // used to build the TL buy anchor; ALL currencies inherit it
   marginTlTsh:      { type: Number, default: 5, min: 0 },          // used to build the TL sell anchor; ALL currencies inherit it
 
+  // --- Delivery Fee ---
+  // Optional, opt-in per transaction (client checks "needs delivery"). A
+  // flat TL amount, converted into whatever currency the client is
+  // RECEIVING and deducted from it — using the live reference rate (no
+  // margin), since this is a pass-through cost estimate, not a trade.
+  deliveryFeeTl: { type: Number, default: 300, min: 0 },
+
   // --- WhatsApp ---
   whatsappNumber: { type: String, default: '' }, // e.g. +905xxxxxxxxx (international format, no + needed for wa.me but we accept either)
 

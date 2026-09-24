@@ -19,6 +19,11 @@ const TransactionSchema = new mongoose.Schema({
   referenceRate: { type: Number, required: true }, // live reference rate (pre-margin) at quote time
   rateUsed:      { type: Number, required: true },  // the actual sell (send_tsh) or buy (want_tsh) rate applied
 
+  // Delivery — optional, opt-in per transaction. deliveryFeeAmount is in
+  // `receiveCurrency` (already deducted from receiveAmount above).
+  needsDelivery:     { type: Boolean, default: false },
+  deliveryFeeAmount: { type: Number, default: 0, min: 0 },
+
   status: {
     type: String,
     enum: ['pending', 'payment_sent', 'completed', 'cancelled'],

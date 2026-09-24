@@ -12,15 +12,18 @@ const CURRENCIES = ['TL', 'USD', 'EUR', 'GBP'];
 // POST /api/quote — the SERVER is the source of truth for every quote.
 // The frontend must never calculate the final numbers itself.
 //
-// body: { direction: 'send_tsh' | 'want_tsh', amount, currency? }
+// body: { direction: 'send_tsh' | 'want_tsh', amount, currency?, needsDelivery? }
 //   send_tsh: amount = TSh the customer is sending. Returns TL/USD/EUR/GBP,
-//             each computed at our SELL rate (reference * (1 + margin%)).
+//             each computed at our SELL rate.
 //   want_tsh: currency = TL/USD/EUR/GBP the customer is giving. Returns the
-//             final TSh, computed at our BUY rate (reference * (1 - margin%)).
+//             final TSh, computed at our BUY rate.
+//   needsDelivery: if true, deducts the delivery fee (settings.deliveryFeeTl,
+//             converted into whatever the client is receiving) from the result.
 export async function POST(request) {
   try {
     const body = await request.json();
     const { direction, currency } = body;
+    const needsDelivery = Boolean(body.needsDelivery);
 
     if (!DIRECTIONS.includes(direction)) {
       return NextResponse.json({ success: false, error: 'Invalid direction' }, { status: 400 });
@@ -47,7 +50,7 @@ export async function POST(request) {
     // throwing, EXCEPT for want_tsh in a foreign currency, where it throws.
     let quote;
     try {
-      quote = calculateQuote({ direction, currency, amount, settings, rates });
+      quote = calculateQuote({ direction, currency, amount, settings, rates, needsDelivery });
     } catch (err) {
       if (err instanceof QuoteError) {
         return NextResponse.json({ success: false, error: err.message }, { status: 409 });

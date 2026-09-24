@@ -5,7 +5,11 @@ import Transaction from '@/models/Transaction';
 import Customer from '@/models/Customer';
 import Payment from '@/models/Payment';
 import { getUsableRates } from '@/lib/rates';
-import { calculateTshToOne, calculateForeignToTsh, getReferenceRate, parseAmount, QuoteError } from '@/lib/calc';
+import {
+  calculateTshToOne, calculateForeignToTsh, getReferenceRate,
+  convertDeliveryFeeToForeign, convertDeliveryFeeToTsh,
+  parseAmount, QuoteError,
+} from '@/lib/calc';
 
 const FOREIGN_OR_TL = ['TL', 'USD', 'EUR', 'GBP'];
 
@@ -24,6 +28,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { direction, customerName, customerPhone } = body;
+    const needsDelivery = Boolean(body.needsDelivery);
 
     if (!['send_tsh', 'want_tsh'].includes(direction)) {
       return NextResponse.json({ success: false, error: 'Invalid direction' }, { status: 400 });
@@ -42,6 +47,7 @@ export async function POST(request) {
     const { rates } = await getUsableRates();
     const buyMarginPercent = settings.buyMarginPercent;
     const marginTlTsh = settings.marginTlTsh;
+    const deliveryFeeTl = settings.deliveryFeeTl;
 
     const customer = await Customer.findOrCreate({
       name: customerName.trim(),
@@ -56,9 +62,20 @@ export async function POST(request) {
       if (!FOREIGN_OR_TL.includes(toCurrency)) {
         return NextResponse.json({ success: false, error: 'Unsupported currency' }, { status: 400 });
       }
-      const { amount: receiveAmount, sellRate } = calculateTshToOne(amount, toCurrency, rates, marginTlTsh);
-      if (receiveAmount === null) {
+      const { amount: grossAmount, sellRate } = calculateTshToOne(amount, toCurrency, rates, marginTlTsh);
+      if (grossAmount === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
+      }
+
+      let receiveAmount = grossAmount;
+      let deliveryFeeAmount = 0;
+      if (needsDelivery) {
+        const fee = convertDeliveryFeeToForeign(deliveryFeeTl, toCurrency, rates);
+        if (fee === null) {
+          return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
+        }
+        deliveryFeeAmount = fee;
+        receiveAmount = Math.max(Math.round((grossAmount - fee) * 100) / 100, 0);
       }
 
       txData = {
@@ -70,6 +87,8 @@ export async function POST(request) {
         receiveAmount,
         referenceRate: getReferenceRate(toCurrency, rates),
         rateUsed: sellRate,
+        needsDelivery,
+        deliveryFeeAmount,
       };
     } else {
       // Customer gives `fromCurrency` (business label), wants TSh — our BUY rate
@@ -77,14 +96,25 @@ export async function POST(request) {
       if (!FOREIGN_OR_TL.includes(fromCurrency)) {
         return NextResponse.json({ success: false, error: 'Unsupported currency' }, { status: 400 });
       }
-      const { finalTsh, buyRate } = calculateForeignToTsh({
+      const { finalTsh: grossTsh, buyRate } = calculateForeignToTsh({
         currency: fromCurrency,
         amount,
         rates,
         buyMarginPercent,
       });
-      if (finalTsh === null) {
+      if (grossTsh === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
+      }
+
+      let finalTsh = grossTsh;
+      let deliveryFeeAmount = 0;
+      if (needsDelivery) {
+        const fee = convertDeliveryFeeToTsh(deliveryFeeTl, rates);
+        if (fee === null) {
+          return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
+        }
+        deliveryFeeAmount = fee;
+        finalTsh = Math.max(Math.round((grossTsh - fee) * 100) / 100, 0);
       }
 
       txData = {
@@ -96,6 +126,8 @@ export async function POST(request) {
         receiveAmount: finalTsh,
         referenceRate: getReferenceRate(fromCurrency, rates),
         rateUsed: buyRate,
+        needsDelivery,
+        deliveryFeeAmount,
       };
     }
 
@@ -121,6 +153,8 @@ export async function POST(request) {
       receiveAmount:   tx.receiveAmount,
       receiveCurrency: tx.receiveCurrency,
       rateUsed:        tx.rateUsed,
+      needsDelivery:   tx.needsDelivery,
+      deliveryFeeAmount: tx.deliveryFeeAmount,
       createdAt:       tx.createdAt,
     }, { status: 201 });
 

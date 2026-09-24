@@ -14,6 +14,8 @@ import {
   calculateTshToAll,
   calculateForeignToTsh,
   calculateQuote,
+  convertDeliveryFeeToForeign,
+  convertDeliveryFeeToTsh,
   QuoteError,
 } from '../lib/calc.js';
 
@@ -194,6 +196,52 @@ test('buy margin (%) change affects TL and every foreign currency identically in
   const { finalTsh: tlAt5 } = calculateForeignToTsh({ currency: 'TL', amount: 100, rates: RATES, buyMarginPercent: 5 });
   assert.ok(tlAt5 < tlAt2_5);
 });
+
+console.log('\n10. Delivery fee: a flat TL amount converted (at the live reference rate, no margin) into whatever the client receives');
+const DELIVERY_FEE_TL = 300;
+test('delivery fee in TL itself = the flat amount, unconverted', () => {
+  assert.equal(convertDeliveryFeeToForeign(DELIVERY_FEE_TL, 'TL', RATES), 300);
+});
+test('delivery fee in USD = 300 / tlPerUnit(USD) = 300 / 32 = 9.375, rounded to 9.38', () => {
+  assert.equal(convertDeliveryFeeToForeign(DELIVERY_FEE_TL, 'USD', RATES), 9.38);
+});
+test('delivery fee in TSh = 300 * TL reference (54) = 16,200', () => {
+  assert.equal(convertDeliveryFeeToTsh(DELIVERY_FEE_TL, RATES), 16200);
+});
+test('zero delivery fee converts to 0 in any currency, no rate lookup needed', () => {
+  assert.equal(convertDeliveryFeeToForeign(0, 'USD', RATES), 0);
+  assert.equal(convertDeliveryFeeToTsh(0, RATES), 0);
+});
+test('calculateQuote with needsDelivery deducts the fee from every "send TSh" result', () => {
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'send_tsh', amount: 1000000, settings, rates: RATES, needsDelivery: true });
+  assert.equal(quote.needsDelivery, true);
+  assert.ok(quote.results.USD < quote.grossResults.USD, 'net USD amount must be less than gross once delivery fee is deducted');
+  assert.equal(round2(quote.grossResults.USD - quote.deliveryFees.USD), quote.results.USD);
+});
+test('calculateQuote with needsDelivery deducts the fee from "want TSh" result', () => {
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'want_tsh', currency: 'USD', amount: 100, settings, rates: RATES, needsDelivery: true });
+  assert.equal(quote.needsDelivery, true);
+  assert.ok(quote.finalTsh < quote.grossTsh, 'net TSh must be less than gross once delivery fee is deducted');
+  assert.equal(round2(quote.grossTsh - quote.deliveryFeeTsh), quote.finalTsh);
+});
+test('calculateQuote without needsDelivery is unaffected (no gross/fee fields, same result as before)', () => {
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'send_tsh', amount: 1000000, settings, rates: RATES });
+  assert.equal(quote.needsDelivery, false);
+  assert.equal(quote.grossResults, undefined);
+});
+test('delivery fee never pushes a result below zero, even for tiny amounts', () => {
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'want_tsh', currency: 'USD', amount: 1, settings, rates: RATES, needsDelivery: true });
+  assert.ok(quote.finalTsh >= 0, 'finalTsh must be clamped at 0, never negative');
+});
+
+// round2 isn't exported, so mirror it locally for the assertions above.
+function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
 
 console.log(`\n${passed} test group(s) passed.\n`);
 if (process.exitCode) {
