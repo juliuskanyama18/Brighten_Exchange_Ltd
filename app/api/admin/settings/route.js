@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 const ALLOWED_FIELDS = [
-  'anchorTshPerTl', 'commissionTl', 'sendingFee',
+  'anchorTshPerTl', 'marginPercent',
   'whatsappNumber', 'paymentDetails', 'displayName',
 ];
 
@@ -33,18 +33,9 @@ function validateNumericFields(body) {
       return 'Anchor rate must be a number of at least 1';
     }
   }
-  if (body.commissionTl !== undefined) {
-    if (!isFiniteNumber(body.commissionTl) || body.commissionTl < 0) {
-      return 'Commission must be a number of at least 0';
-    }
-  }
-  if (body.sendingFee !== undefined) {
-    const { type, value } = body.sendingFee || {};
-    if (!['flat', 'percentage'].includes(type)) {
-      return 'Sending fee type must be "flat" or "percentage"';
-    }
-    if (!isFiniteNumber(value) || value < 0) {
-      return 'Sending fee value must be a number of at least 0';
+  if (body.marginPercent !== undefined) {
+    if (!isFiniteNumber(body.marginPercent) || body.marginPercent < 0 || body.marginPercent >= 100) {
+      return 'Margin must be a number between 0 and 99';
     }
   }
   return null;

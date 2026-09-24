@@ -41,7 +41,7 @@ export default function Converter({ paymentDetails }) {
   // ---- Tab 2: I want TSh ----
   const [wantCurrency, setWantCurrency] = useState('USD');
   const [wantAmount, setWantAmount] = useState('');
-  const [wantResult, setWantResult] = useState(null); // { grossTsh, sendingFeeTsh, commissionTsh, finalTsh }
+  const [wantResult, setWantResult] = useState(null); // { finalTsh, buyRate }
   const [wantLoading, setWantLoading] = useState(false);
   const [wantError, setWantError] = useState('');
 
@@ -126,12 +126,14 @@ export default function Converter({ paymentDetails }) {
   const handleGetQuoteSend = (currency) => {
     const amount = sendResults?.[currency];
     if (amount === null || amount === undefined) return;
+    const tshAmountNum = parseFloat(tshAmount.replace(/,/g, ''));
     setQuote({
       direction: 'send_tsh',
       fromCurrency: 'TZS',
       toCurrency: currency,
-      sendAmount: parseFloat(tshAmount.replace(/,/g, '')),
+      sendAmount: tshAmountNum,
       receiveAmount: amount,
+      rateUsed: tshAmountNum / amount, // sellRate, by definition of amount = tshAmount / sellRate
     });
   };
 
@@ -143,11 +145,7 @@ export default function Converter({ paymentDetails }) {
       toCurrency: 'TZS',
       sendAmount: parseFloat(wantAmount.replace(/,/g, '')),
       receiveAmount: wantResult.finalTsh,
-      breakdown: {
-        grossTsh: wantResult.grossTsh,
-        sendingFeeTsh: wantResult.sendingFeeTsh,
-        commissionTsh: wantResult.commissionTsh,
-      },
+      rateUsed: wantResult.buyRate,
     });
   };
 
@@ -319,16 +317,10 @@ export default function Converter({ paymentDetails }) {
             ) : wantResult ? (
               <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Gross converted amount</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">{formatAmount(wantResult.grossTsh, 'TZS')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">− Platform sending fee</span>
-                  <span className="font-semibold text-red-500">−{formatAmount(wantResult.sendingFeeTsh, 'TZS')}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">− Brighten commission</span>
-                  <span className="font-semibold text-red-500">−{formatAmount(wantResult.commissionTsh, 'TZS')}</span>
+                  <span className="text-slate-500">Our rate</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    1 {currencyDisplayLabel(wantCurrency)} = {formatAmount(wantResult.buyRate, 'TZS')}
+                  </span>
                 </div>
                 <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
                 <div className="flex justify-between">

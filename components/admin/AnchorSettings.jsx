@@ -2,14 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { formatAmount, formatDate } from '@/utils/formatting';
+import { formatDate } from '@/utils/formatting';
 
 export default function AnchorSettings({ settings, onUpdate }) {
   const [form, setForm] = useState({
     anchorTshPerTl: settings?.anchorTshPerTl ?? 60,
-    commissionTl:   settings?.commissionTl   ?? 100,
-    sendingFeeType:  settings?.sendingFee?.type  ?? 'flat',
-    sendingFeeValue: settings?.sendingFee?.value ?? 10000,
+    marginPercent:  settings?.marginPercent  ?? 5,
     whatsappNumber: settings?.whatsappNumber ?? '',
   });
   const [saving, setSaving] = useState(false);
@@ -33,28 +31,38 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   useEffect(() => { loadRates(); }, []);
 
-  const commissionTsh = form.anchorTshPerTl && form.commissionTl
-    ? Number(form.commissionTl) * Number(form.anchorTshPerTl)
-    : 0;
+  const anchorNum = Number(form.anchorTshPerTl);
+  const marginNum = Number(form.marginPercent);
+  const marginValid = Number.isFinite(marginNum) && marginNum >= 0 && marginNum < 100;
+  const anchorValid = Number.isFinite(anchorNum) && anchorNum >= 1;
+
+  // Live preview of what each currency's buy/sell price will be, computed
+  // the same way lib/calc.js does — so the admin can sanity-check the
+  // margin before saving.
+  const referenceRate = (currency) => {
+    if (currency === 'TL') return anchorValid ? anchorNum : null;
+    return rates?.rates?.[currency]?.tzsPerUnit ?? null;
+  };
+  const previewRows = ['TL', 'USD', 'EUR', 'GBP'].map((c) => {
+    const ref = referenceRate(c);
+    if (ref === null || !marginValid) return { currency: c, sell: null, buy: null };
+    return {
+      currency: c,
+      sell: ref * (1 + marginNum / 100),
+      buy:  ref * (1 - marginNum / 100),
+    };
+  });
 
   const handleSave = async () => {
     // Catch a blank/invalid field here — otherwise parseFloat('') = NaN,
     // JSON.stringify silently turns NaN into null, and the field would save
     // as null (this previously broke every "I want TSh" quote in production).
-    const anchorTshPerTl = parseFloat(form.anchorTshPerTl);
-    const commissionTl   = parseFloat(form.commissionTl);
-    const sendingFeeValue = parseFloat(form.sendingFeeValue);
-
-    if (!Number.isFinite(anchorTshPerTl) || anchorTshPerTl < 1) {
+    if (!anchorValid) {
       setSaveError('Anchor rate must be a number of at least 1 — it looks empty or invalid.');
       return;
     }
-    if (!Number.isFinite(commissionTl) || commissionTl < 0) {
-      setSaveError('Commission must be a number of at least 0.');
-      return;
-    }
-    if (!Number.isFinite(sendingFeeValue) || sendingFeeValue < 0) {
-      setSaveError('Sending fee value must be a number of at least 0.');
+    if (!marginValid) {
+      setSaveError('Margin must be a number between 0 and 99.');
       return;
     }
 
@@ -62,12 +70,8 @@ export default function AnchorSettings({ settings, onUpdate }) {
     setSaving(true);
     try {
       const { data } = await axios.put('/api/admin/settings', {
-        anchorTshPerTl,
-        commissionTl,
-        sendingFee: {
-          type:  form.sendingFeeType,
-          value: sendingFeeValue,
-        },
+        anchorTshPerTl: anchorNum,
+        marginPercent:  marginNum,
         whatsappNumber: form.whatsappNumber.trim(),
       });
       if (data.success) {
@@ -105,10 +109,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
     <div className="space-y-6">
       {/* Anchor Rate */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Brighten Anchor Rate</h3>
+        <h3 className="font-bold text-slate-900 dark:text-white mb-1">TL Reference Rate</h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
           This is YOUR business rate — not a market rate, and the ExchangeRate-API will never overwrite it.
-          It is the sole source of truth for TSh ↔ TL and is used as a leg in every USD/EUR/GBP calculation.
+          It's the center point for TL: your margin below is applied on top of it to get your buy and sell prices.
         </p>
         <div className="max-w-xs">
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
@@ -125,63 +129,52 @@ export default function AnchorSettings({ settings, onUpdate }) {
         </div>
       </div>
 
-      {/* Commission */}
+      {/* Margin */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Brighten Commission</h3>
+        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Margin (Buy/Sell Spread)</h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          Charged only when a customer sends foreign currency and wants TSh. Expressed as "X TL worth of TSh",
-          so it automatically scales if the anchor above changes.
+          This is your entire profit margin — no separate commission or sending fee on top. It's applied to
+          EVERY currency (TL, USD, EUR, GBP), in BOTH directions: when a customer buys currency from you, you
+          charge this much above the reference rate; when they sell currency to you, you pay this much below it.
         </p>
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
-          <div className="w-full sm:w-auto sm:max-w-xs">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              Commission (TL)
-            </label>
-            <input
-              type="number"
-              step="1"
-              value={form.commissionTl}
-              onChange={(e) => setForm({ ...form, commissionTl: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
-            />
-            <p className="text-xs text-slate-400 mt-1">Default: 100</p>
-          </div>
-          <p className="text-sm text-slate-500 sm:pb-2.5">
-            = <span className="font-semibold text-slate-900 dark:text-white">{formatAmount(commissionTsh, 'TZS')}</span> at the current anchor
-          </p>
+        <div className="max-w-xs">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+            Margin (%)
+          </label>
+          <input
+            type="number"
+            step="0.5"
+            value={form.marginPercent}
+            onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
+          />
+          <p className="text-xs text-slate-400 mt-1">Default: 5</p>
         </div>
-      </div>
 
-      {/* Sending Fee */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Platform Sending Fee</h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          Separate from the commission above. Also only applied when a customer sends foreign currency and wants TSh.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Type</label>
-            <select
-              value={form.sendingFeeType}
-              onChange={(e) => setForm({ ...form, sendingFeeType: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
-            >
-              <option value="flat">Flat (TZS)</option>
-              <option value="percentage">Percentage (%)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              Value {form.sendingFeeType === 'percentage' ? '(%)' : '(TZS)'}
-            </label>
-            <input
-              type="number"
-              step={form.sendingFeeType === 'percentage' ? '0.1' : '100'}
-              value={form.sendingFeeValue}
-              onChange={(e) => setForm({ ...form, sendingFeeValue: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
-            />
-          </div>
+        {/* Live preview of resulting buy/sell prices */}
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                <th className="py-2 pr-4">Currency</th>
+                <th className="py-2 pr-4">You Sell At</th>
+                <th className="py-2">You Buy At</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
+              {previewRows.map((row) => (
+                <tr key={row.currency}>
+                  <td className="py-2 pr-4 font-semibold text-slate-900 dark:text-white">{row.currency}</td>
+                  <td className="py-2 pr-4 text-emerald-600 dark:text-emerald-400 font-mono">
+                    {row.sell !== null ? `${row.sell.toFixed(row.currency === 'TL' ? 2 : 2)} TSh` : '—'}
+                  </td>
+                  <td className="py-2 text-red-500 font-mono">
+                    {row.buy !== null ? `${row.buy.toFixed(2)} TSh` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -226,8 +219,9 @@ export default function AnchorSettings({ settings, onUpdate }) {
           </button>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          Fetched from ExchangeRate-API and cached in MongoDB. Used for the TL/TZS leg of USD/EUR/GBP
-          calculations — never for TSh/TL, which always uses the anchor above.
+          Fetched from ExchangeRate-API and cached in MongoDB. The TSh figure below is the reference rate for
+          USD/EUR/GBP (your margin above is applied on top of it). TL never uses this — it always uses your
+          anchor above.
         </p>
 
         {refreshError && (
@@ -247,10 +241,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
                 <div key={c} className="bg-slate-50 dark:bg-slate-900 rounded-xl p-3">
                   <p className="text-xs font-semibold text-slate-500 mb-1">{c}</p>
                   <p className="text-sm text-slate-900 dark:text-white">
-                    1 {c} = {rates.rates[c].tlPerUnit?.toFixed(4) ?? '—'} TL
-                  </p>
-                  <p className="text-sm text-slate-900 dark:text-white">
                     1 {c} = {rates.rates[c].tzsPerUnit?.toFixed(2) ?? '—'} TSh
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    (1 {c} = {rates.rates[c].tlPerUnit?.toFixed(4) ?? '—'} TL, for reference)
                   </p>
                 </div>
               ))}

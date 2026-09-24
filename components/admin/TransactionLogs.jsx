@@ -112,7 +112,7 @@ export default function TransactionLogs() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                  {['Reference','Customer','Date','Direction','Send','Receive','Fee + Commission','Status','Action'].map((h) => (
+                  {['Reference','Customer','Date','Direction','Send','Receive','Rate Used','Status','Action'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       {h}
                     </th>
@@ -142,9 +142,7 @@ export default function TransactionLogs() {
                       {currencyFlag(tx.receiveCurrency)} {formatAmount(tx.receiveAmount, tx.receiveCurrency)}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
-                      {tx.direction === 'want_tsh'
-                        ? `${formatAmount(tx.sendingFeeTsh, 'TZS')} + ${formatAmount(tx.commissionTsh, 'TZS')}`
-                        : '—'}
+                      {tx.rateUsed ? `${tx.rateUsed.toFixed(2)} TSh` : '—'}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[tx.status]}`}>

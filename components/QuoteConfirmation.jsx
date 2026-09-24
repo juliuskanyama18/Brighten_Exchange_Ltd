@@ -6,7 +6,7 @@ import PaymentDetails from './PaymentDetails';
 import { formatAmount, currencyFlag, currencyDisplayLabel } from '@/utils/formatting';
 
 function buildWhatsAppMessage(quote) {
-  const { direction, fromCurrency, toCurrency, sendAmount, receiveAmount, breakdown } = quote;
+  const { direction, fromCurrency, toCurrency, sendAmount, receiveAmount, rateUsed } = quote;
   const lines = ['Hello Brighten Exchange,', '', 'I would like to exchange:'];
 
   if (direction === 'send_tsh') {
@@ -17,8 +17,8 @@ function buildWhatsAppMessage(quote) {
     lines.push(`${formatAmount(sendAmount, fromCurrency)} ${currencyDisplayLabel(fromCurrency)}`);
     lines.push('');
     lines.push(`Estimated TSh I receive: ${formatAmount(receiveAmount, 'TZS')}`);
-    if (breakdown) {
-      lines.push(`(after ${formatAmount(breakdown.sendingFeeTsh, 'TZS')} sending fee + ${formatAmount(breakdown.commissionTsh, 'TZS')} commission)`);
+    if (rateUsed) {
+      lines.push(`(at a rate of 1 ${currencyDisplayLabel(fromCurrency)} = ${formatAmount(rateUsed, 'TZS')})`);
     }
   }
 
@@ -27,7 +27,7 @@ function buildWhatsAppMessage(quote) {
 }
 
 export default function QuoteConfirmation({ quote, paymentDetails, onBack, onReset }) {
-  const { fromCurrency, toCurrency, sendAmount, receiveAmount, direction, breakdown } = quote;
+  const { fromCurrency, toCurrency, sendAmount, receiveAmount, direction, rateUsed } = quote;
 
   const [step, setStep]           = useState('confirm'); // 'confirm' | 'payment' | 'done'
   const [loading, setLoading]     = useState(false);
@@ -120,25 +120,14 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
           </div>
         </div>
 
-        {/* Fee breakdown — only shown when the customer is sending foreign currency for TSh */}
-        {direction === 'want_tsh' && breakdown && (
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2">
+        {/* Rate used — shown for transparency on both directions */}
+        {rateUsed && (
+          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4">
             <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Gross converted amount</span>
-              <span className="font-semibold text-slate-900 dark:text-white">{formatAmount(breakdown.grossTsh, 'TZS')}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">− Platform sending fee</span>
-              <span className="font-semibold text-red-500">−{formatAmount(breakdown.sendingFeeTsh, 'TZS')}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">− Brighten commission</span>
-              <span className="font-semibold text-red-500">−{formatAmount(breakdown.commissionTsh, 'TZS')}</span>
-            </div>
-            <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
-            <div className="flex justify-between">
-              <span className="font-semibold text-slate-700 dark:text-slate-200">= Customer receives</span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatAmount(receiveAmount, 'TZS')}</span>
+              <span className="text-slate-500">Rate used</span>
+              <span className="font-semibold text-slate-900 dark:text-white">
+                1 {currencyDisplayLabel(direction === 'send_tsh' ? toCurrency : fromCurrency)} = {formatAmount(rateUsed, 'TZS')}
+              </span>
             </div>
           </div>
         )}

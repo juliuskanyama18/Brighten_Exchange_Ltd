@@ -1,27 +1,20 @@
 import mongoose from 'mongoose';
 
-const SendingFeeSchema = new mongoose.Schema({
-  type:  { type: String, enum: ['flat', 'percentage'], default: 'flat' },
-  value: { type: Number, default: 10000, min: 0 }, // TZS if flat, % if percentage
-}, { _id: false });
-
 const SettingsSchema = new mongoose.Schema({
-  // --- Brighten Anchor Rate ---
+  // --- Brighten Anchor Rate (TL reference) ---
   // This is a BUSINESS rate, not a market rate. It is set by hand by the admin
-  // and must never be overwritten by the ExchangeRate-API fetch.
-  // min: 1 — a zero/missing anchor divides every conversion by ~0.
+  // (e.g. from XE) and must never be overwritten by the ExchangeRate-API fetch.
+  // It's the CENTER point for TL: sellRate = anchor*(1+margin/100), buyRate =
+  // anchor*(1-margin/100). USD/EUR/GBP use the live API rate as their center
+  // point instead. min: 1 — a zero/missing anchor divides every conversion by ~0.
   anchorTshPerTl: { type: Number, default: 60, min: 1 }, // 1 TL = ? TSh
 
-  // --- Brighten Commission ---
-  // Conceptually "commissionTl worth of TSh", so it scales automatically if
-  // the anchor changes. Only applied on the "customer wants TSh" direction.
-  commissionTl: { type: Number, default: 100, min: 0 },
-
-  // --- Platform Sending Fee ---
-  // Separate from the commission. Only applied on the "customer wants TSh"
-  // direction. Structured so tiered fees can be added later without
-  // reshaping this field.
-  sendingFee: { type: SendingFeeSchema, default: () => ({}) },
+  // --- Margin (buy/sell spread) ---
+  // Single percentage applied to EVERY currency (TL, USD, EUR, GBP), in BOTH
+  // directions: sellRate = reference*(1+margin/100), buyRate = reference*(1-margin/100).
+  // This is the business's entire profit margin — no separate commission or
+  // sending fee on top (replaced 2026-09-25; see git history for the old model).
+  marginPercent: { type: Number, default: 5, min: 0, max: 99 },
 
   // --- WhatsApp ---
   whatsappNumber: { type: String, default: '' }, // e.g. +905xxxxxxxxx (international format, no + needed for wa.me but we accept either)

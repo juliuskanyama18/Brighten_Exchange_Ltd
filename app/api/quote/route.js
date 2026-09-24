@@ -13,9 +13,10 @@ const CURRENCIES = ['TL', 'USD', 'EUR', 'GBP'];
 // The frontend must never calculate the final numbers itself.
 //
 // body: { direction: 'send_tsh' | 'want_tsh', amount, currency? }
-//   send_tsh: amount = TSh the customer is sending. Returns TL/USD/EUR/GBP.
+//   send_tsh: amount = TSh the customer is sending. Returns TL/USD/EUR/GBP,
+//             each computed at our SELL rate (reference * (1 + margin%)).
 //   want_tsh: currency = TL/USD/EUR/GBP the customer is giving. Returns the
-//             gross/fee/commission/final TSh breakdown.
+//             final TSh, computed at our BUY rate (reference * (1 - margin%)).
 export async function POST(request) {
   try {
     const body = await request.json();

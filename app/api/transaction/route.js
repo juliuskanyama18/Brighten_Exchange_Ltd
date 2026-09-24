@@ -7,6 +7,8 @@ import Payment from '@/models/Payment';
 import { getUsableRates } from '@/lib/rates';
 import { calculateTshToOne, calculateForeignToTsh, parseAmount, QuoteError } from '@/lib/calc';
 
+const FOREIGN_OR_TL = ['TL', 'USD', 'EUR', 'GBP'];
+
 export const dynamic = 'force-dynamic';
 
 const PAYMENT_METHODS = ['NMB', 'Airtel', 'Selcom', 'Bank', 'Cash', 'Other'];
@@ -39,6 +41,7 @@ export async function POST(request) {
     const settings = await Settings.getSettings();
     const { rates } = await getUsableRates();
     const anchorTshPerTl = settings.anchorTshPerTl;
+    const marginPercent = settings.marginPercent;
 
     const customer = await Customer.findOrCreate({
       name: customerName.trim(),
@@ -48,12 +51,12 @@ export async function POST(request) {
     let txData;
 
     if (direction === 'send_tsh') {
-      // Customer gives TSh, wants `toCurrency` (business label: TL/USD/EUR/GBP)
+      // Customer gives TSh, wants `toCurrency` (business label: TL/USD/EUR/GBP) — our SELL rate
       const toCurrency = DB_TO_BUSINESS[body.toCurrency] || body.toCurrency;
-      if (!['TL', 'USD', 'EUR', 'GBP'].includes(toCurrency)) {
+      if (!FOREIGN_OR_TL.includes(toCurrency)) {
         return NextResponse.json({ success: false, error: 'Unsupported currency' }, { status: 400 });
       }
-      const { amount: receiveAmount, foreignToTlRate } = calculateTshToOne(amount, toCurrency, anchorTshPerTl, rates);
+      const { amount: receiveAmount, sellRate } = calculateTshToOne(amount, toCurrency, anchorTshPerTl, rates, marginPercent);
       if (receiveAmount === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
       }
@@ -66,26 +69,25 @@ export async function POST(request) {
         sendAmount: amount,
         receiveAmount,
         anchorTshPerTl,
-        foreignToTlRate,
+        marginPercent,
+        rateUsed: sellRate,
       };
     } else {
-      // Customer gives `fromCurrency` (business label), wants TSh
+      // Customer gives `fromCurrency` (business label), wants TSh — our BUY rate
       const fromCurrency = DB_TO_BUSINESS[body.fromCurrency] || body.fromCurrency;
-      if (!['TL', 'USD', 'EUR', 'GBP'].includes(fromCurrency)) {
+      if (!FOREIGN_OR_TL.includes(fromCurrency)) {
         return NextResponse.json({ success: false, error: 'Unsupported currency' }, { status: 400 });
       }
-      if (fromCurrency !== 'TL' && !rates?.[fromCurrency]?.tzsPerUnit) {
-        return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
-      }
-      const foreignToTzsRate = fromCurrency === 'TL' ? null : rates[fromCurrency].tzsPerUnit;
-      const breakdown = calculateForeignToTsh({
+      const { finalTsh, buyRate } = calculateForeignToTsh({
         currency: fromCurrency,
         amount,
         anchorTshPerTl,
-        foreignToTzsRate,
-        commissionTl: settings.commissionTl,
-        sendingFee: settings.sendingFee,
+        rates,
+        marginPercent,
       });
+      if (finalTsh === null) {
+        return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
+      }
 
       txData = {
         customer: customer._id,
@@ -93,12 +95,10 @@ export async function POST(request) {
         sendCurrency: BUSINESS_TO_DB[fromCurrency],
         receiveCurrency: 'TZS',
         sendAmount: amount,
-        receiveAmount: breakdown.finalTsh,
+        receiveAmount: finalTsh,
         anchorTshPerTl,
-        foreignToTzsRate,
-        grossTsh: breakdown.grossTsh,
-        sendingFeeTsh: breakdown.sendingFeeTsh,
-        commissionTsh: breakdown.commissionTsh,
+        marginPercent,
+        rateUsed: buyRate,
       };
     }
 
@@ -123,9 +123,7 @@ export async function POST(request) {
       sendCurrency:    tx.sendCurrency,
       receiveAmount:   tx.receiveAmount,
       receiveCurrency: tx.receiveCurrency,
-      grossTsh:        tx.grossTsh,
-      sendingFeeTsh:   tx.sendingFeeTsh,
-      commissionTsh:   tx.commissionTsh,
+      rateUsed:        tx.rateUsed,
       createdAt:       tx.createdAt,
     }, { status: 201 });
 

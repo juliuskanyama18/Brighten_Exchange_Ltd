@@ -128,7 +128,7 @@ export default function AdminDashboard() {
                 { label: 'Total Transactions', value: stats.total, color: 'text-brand-700 dark:text-gold-400', bg: 'bg-brand-50 dark:bg-brand-900/20' },
                 { label: 'Pending',  value: stats.pending,   color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
                 { label: 'Anchor (1 TL)', value: `${settings?.anchorTshPerTl ?? '—'} TSh`, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-                { label: 'Commission', value: `${settings?.commissionTl ?? '—'} TL`, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+                { label: 'Margin', value: `±${settings?.marginPercent ?? '—'}%`, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
               ].map((stat) => (
                 <div key={stat.label} className={`${stat.bg} rounded-2xl p-5 border border-transparent`}>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{stat.label}</p>
@@ -148,14 +148,8 @@ export default function AdminDashboard() {
                       <span className="font-semibold text-slate-900 dark:text-white">1 TL = {settings.anchorTshPerTl} TSh</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Commission</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">{settings.commissionTl} TL</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Sending Fee</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {settings.sendingFee?.type === 'percentage' ? `${settings.sendingFee.value}%` : `${settings.sendingFee?.value} TZS`}
-                      </span>
+                      <span className="text-slate-500">Margin</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">±{settings.marginPercent}%</span>
                     </div>
                   </div>
                   <div className="space-y-2">

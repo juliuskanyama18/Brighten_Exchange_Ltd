@@ -14,15 +14,10 @@ const TransactionSchema = new mongoose.Schema({
   receiveAmount:   { type: Number, required: true, min: 0 },
 
   // Rates/settings snapshot at the time of quote — for audit/history, never
-  // recomputed retroactively if the admin later changes the anchor/rates.
-  anchorTshPerTl:   { type: Number, required: true }, // Brighten anchor used
-  foreignToTlRate:  { type: Number, default: null },  // used for send_tsh with a foreign currency
-  foreignToTzsRate: { type: Number, default: null },  // used for want_tsh with a foreign currency
-
-  // Only populated for direction === 'want_tsh'
-  grossTsh:      { type: Number, default: null },
-  sendingFeeTsh: { type: Number, default: null },
-  commissionTsh: { type: Number, default: null },
+  // recomputed retroactively if the admin later changes the anchor/margin.
+  anchorTshPerTl: { type: Number, required: true }, // Brighten TL reference rate used
+  marginPercent:  { type: Number, required: true }, // margin applied at quote time
+  rateUsed:       { type: Number, required: true }, // the actual sell (send_tsh) or buy (want_tsh) rate applied
 
   status: {
     type: String,
