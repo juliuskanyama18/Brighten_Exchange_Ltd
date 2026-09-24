@@ -10,11 +10,11 @@ const SettingsSchema = new mongoose.Schema({
   // marking up its own live reference — see lib/calc.js for the full
   // explanation, including why this makes the sell margin for USD/EUR/GBP
   // move with TL's live rate instead of staying a fixed percentage):
-  //   TL sell anchor = TL reference + marginTlTsh            (flat TSh)
-  //   TL buy anchor  = TL reference * (1 - buyMarginPercent/100)
+  //   TL sell anchor = TL reference + marginTlTsh       (flat TSh)
+  //   TL buy anchor  = TL reference - buyMarginTlTsh    (flat TSh)
   //   USD/EUR/GBP sell/buy = (TL sell/buy anchor) * tlPerUnit(currency)
-  buyMarginPercent: { type: Number, default: 5, min: 0, max: 99 }, // used to build the TL buy anchor; ALL currencies inherit it
-  marginTlTsh:      { type: Number, default: 5, min: 0 },          // used to build the TL sell anchor; ALL currencies inherit it
+  buyMarginTlTsh: { type: Number, default: 3, min: 0 }, // used to build the TL buy anchor (flat TSh, not %); ALL currencies inherit it
+  marginTlTsh:    { type: Number, default: 5, min: 0 }, // used to build the TL sell anchor; ALL currencies inherit it
 
   // --- Delivery Fee ---
   // Optional, opt-in per transaction (client checks "needs delivery"). A

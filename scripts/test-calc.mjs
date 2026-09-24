@@ -45,8 +45,8 @@ const RATES = {
   EUR: { tlPerUnit: 34.5, tzsPerUnit: 1863 },   // 54 * 34.5 = 1863, consistent
   GBP: { tlPerUnit: 40, tzsPerUnit: 2160 },     // 54 * 40 = 2160, consistent
 };
-const BUY_MARGIN = 2.5;    // ALL currencies incl. TL; customer sells to us
-const MARGIN_TL_TSH = 5;   // TL SELL side only, flat TSh -- the anchor for everyone else's sell price too
+const BUY_MARGIN_TL_TSH = 3; // ALL currencies incl. TL; flat TSh subtracted from TL's live rate; customer sells to us
+const MARGIN_TL_TSH = 5;     // TL SELL side, flat TSh -- the anchor for everyone else's sell price too
 
 console.log('\n1. Reference rates (live, no margin applied)');
 test('TL reference = live implied rate (rates.TRY.tzsPerUnit)', () => {
@@ -66,26 +66,28 @@ test('USD sell = TL sell anchor (59) * tlPerUnit(USD) (32) = 1888', () => {
 test('EUR sell = 59 * 34.5 = 2035.5', () => {
   assert.equal(getSellRate('EUR', RATES, MARGIN_TL_TSH), 59 * 34.5);
 });
-test('TL buy anchor = 54 * 0.975 = 52.65', () => {
-  assert.equal(getBuyRate('TL', RATES, BUY_MARGIN), 52.65);
+test('TL buy anchor = 54 - 3 = 51', () => {
+  assert.equal(getBuyRate('TL', RATES, BUY_MARGIN_TL_TSH), 51);
 });
-test('USD buy = TL buy anchor (52.65) * tlPerUnit(USD) (32) = 1684.8', () => {
-  assert.equal(getBuyRate('USD', RATES, BUY_MARGIN), 52.65 * 32);
+test('USD buy = TL buy anchor (51) * tlPerUnit(USD) (32) = 1632', () => {
+  assert.equal(getBuyRate('USD', RATES, BUY_MARGIN_TL_TSH), 51 * 32);
 });
 
-console.log('\n3. Consequence: because reference rates are internally consistent (tzsPerUnit = tlPerUnit * TRY.tzsPerUnit),');
-console.log('   the BUY side matches "mark up each currency independently" exactly, but SELL does NOT (flat TSh != fixed %)');
-test('USD buy via TL anchor equals USD reference marked down directly by the same %', () => {
-  const viaAnchor = getBuyRate('USD', RATES, BUY_MARGIN);
-  const direct = RATES.USD.tzsPerUnit * (1 - BUY_MARGIN / 100);
-  assert.equal(viaAnchor, direct, 'percentage-based buy math commutes through the cross-rate, so these must match exactly');
-});
+console.log('\n3. Consequence: BOTH sell and buy margins are flat TSh amounts on TL, so NEITHER side reduces');
+console.log('   to a fixed percentage on USD/EUR/GBP (a flat TSh offset on TL is a moving target in % terms)');
 test('USD sell via TL anchor does NOT equal a flat 5% markup on USD reference (flat-TSh effect)', () => {
   const viaAnchor = getSellRate('USD', RATES, MARGIN_TL_TSH); // 1888
   const hypothetical5PctDirect = RATES.USD.tzsPerUnit * 1.05; // 1814.4
   assert.notEqual(viaAnchor, hypothetical5PctDirect, 'a flat TSh offset on TL should NOT reduce to a fixed % on other currencies');
   // The actual effective % this works out to: 1888/1728 - 1 ≈ 9.26%, not 5%, because
   // +5 flat on a ~54 TSh/TL rate is a much bigger relative bump than +5 on ~1728.
+});
+test('USD buy via TL anchor does NOT equal a flat 3% markdown on USD reference (flat-TSh effect)', () => {
+  const viaAnchor = getBuyRate('USD', RATES, BUY_MARGIN_TL_TSH); // 1632
+  const hypothetical3PctDirect = RATES.USD.tzsPerUnit * 0.97; // 1676.16
+  assert.notEqual(viaAnchor, hypothetical3PctDirect, 'a flat TSh offset on TL should NOT reduce to a fixed % on other currencies');
+  // The actual effective %: 1 - 1632/1728 ≈ 5.56%, not 3%, because -3 flat on a
+  // ~54 TSh/TL rate is a much bigger relative cut than -3 on ~1728.
 });
 
 console.log('\n4. "I send TSh" (customer gives TSh, receives currency at our SELL rate)');
@@ -101,19 +103,19 @@ test('calculateTshToAll returns all four currencies', () => {
 });
 
 console.log('\n5. "I want TSh" (customer gives currency, receives TSh at our BUY rate)');
-test('24,500 TL at buy rate 52.65 = 1,289,925 TSh', () => {
+test('24,500 TL at buy rate 51 = 1,249,500 TSh', () => {
   const { finalTsh, buyRate } = calculateForeignToTsh({
-    currency: 'TL', amount: 24500, rates: RATES, buyMarginPercent: BUY_MARGIN,
+    currency: 'TL', amount: 24500, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH,
   });
-  assert.equal(buyRate, 52.65);
-  assert.equal(finalTsh, 24500 * 52.65);
+  assert.equal(buyRate, 51);
+  assert.equal(finalTsh, 24500 * 51);
 });
 
 console.log('\n6. Margin guarantees profit on BOTH directions for every currency');
 for (const currency of ['TL', 'USD', 'EUR', 'GBP']) {
   test(`${currency}: buy rate stays below sell rate`, () => {
     assert.ok(
-      getBuyRate(currency, RATES, BUY_MARGIN) < getSellRate(currency, RATES, MARGIN_TL_TSH),
+      getBuyRate(currency, RATES, BUY_MARGIN_TL_TSH) < getSellRate(currency, RATES, MARGIN_TL_TSH),
       'buyRate must stay below sellRate for the spread to guarantee profit'
     );
   });
@@ -122,7 +124,7 @@ test('sending TSh->USD then USD->TSh loses TSh (round trip proves the margin hol
   const tshStart = 1000000;
   const { amount: usdReceived } = calculateTshToOne(tshStart, 'USD', RATES, MARGIN_TL_TSH);
   const { finalTsh: tshBack } = calculateForeignToTsh({
-    currency: 'USD', amount: usdReceived, rates: RATES, buyMarginPercent: BUY_MARGIN,
+    currency: 'USD', amount: usdReceived, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH,
   });
   assert.ok(tshBack < tshStart, `round trip should lose money: ${tshBack} should be < ${tshStart}`);
 });
@@ -140,12 +142,12 @@ test('parseAmount rejects garbage input', () => {
   assert.ok(Number.isNaN(parseAmount('')));
 });
 test('calculateQuote rejects zero/negative amounts', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH };
   assert.throws(() => calculateQuote({ direction: 'send_tsh', amount: -5, settings, rates: RATES }), QuoteError);
   assert.throws(() => calculateQuote({ direction: 'send_tsh', amount: 0, settings, rates: RATES }), QuoteError);
 });
 test('want_tsh in EUR with no cached TRY rate throws QuoteError (EUR now depends on the TL anchor)', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH };
   assert.throws(() => {
     calculateQuote({
       direction: 'want_tsh', currency: 'EUR', amount: 100, settings,
@@ -154,7 +156,7 @@ test('want_tsh in EUR with no cached TRY rate throws QuoteError (EUR now depends
   }, QuoteError);
 });
 test('want_tsh in EUR with no cached tlPerUnit(EUR) throws QuoteError', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH };
   assert.throws(() => {
     calculateQuote({
       direction: 'want_tsh', currency: 'EUR', amount: 100, settings,
@@ -163,7 +165,7 @@ test('want_tsh in EUR with no cached tlPerUnit(EUR) throws QuoteError', () => {
   }, QuoteError);
 });
 test('send_tsh with no EUR tlPerUnit returns null for EUR instead of throwing', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH };
   const { results } = calculateQuote({
     direction: 'send_tsh', amount: 1000000, settings,
     rates: { TRY: RATES.TRY, USD: RATES.USD, EUR: {}, GBP: RATES.GBP },
@@ -192,9 +194,9 @@ test('TL sell margin 5 -> 10 TSh widens the spread for TL AND for every currency
   const { amount: usdSendAt10 } = calculateTshToOne(1000000, 'USD', RATES, 10);
   assert.ok(usdSendAt10 < usdSendAt5, 'USD sell amount must also shrink, since it inherits the wider TL anchor');
 });
-test('buy margin (%) change affects TL and every foreign currency identically in percentage terms', () => {
-  const { finalTsh: tlAt2_5 } = calculateForeignToTsh({ currency: 'TL', amount: 100, rates: RATES, buyMarginPercent: 2.5 });
-  const { finalTsh: tlAt5 } = calculateForeignToTsh({ currency: 'TL', amount: 100, rates: RATES, buyMarginPercent: 5 });
+test('buy margin (flat TSh) change widens the spread: a bigger flat margin means less TSh paid out', () => {
+  const { finalTsh: tlAt2_5 } = calculateForeignToTsh({ currency: 'TL', amount: 100, rates: RATES, buyMarginTlTsh: 2.5 });
+  const { finalTsh: tlAt5 } = calculateForeignToTsh({ currency: 'TL', amount: 100, rates: RATES, buyMarginTlTsh: 5 });
   assert.ok(tlAt5 < tlAt2_5);
 });
 
@@ -214,27 +216,27 @@ test('zero delivery fee converts to 0 in any currency, no rate lookup needed', (
   assert.equal(convertDeliveryFeeToTsh(0, RATES), 0);
 });
 test('calculateQuote with needsDelivery deducts the fee from every "send TSh" result', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'send_tsh', amount: 1000000, settings, rates: RATES, needsDelivery: true });
   assert.equal(quote.needsDelivery, true);
   assert.ok(quote.results.USD < quote.grossResults.USD, 'net USD amount must be less than gross once delivery fee is deducted');
   assert.equal(round2(quote.grossResults.USD - quote.deliveryFees.USD), quote.results.USD);
 });
 test('calculateQuote with needsDelivery deducts the fee from "want TSh" result', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'want_tsh', currency: 'USD', amount: 100, settings, rates: RATES, needsDelivery: true });
   assert.equal(quote.needsDelivery, true);
   assert.ok(quote.finalTsh < quote.grossTsh, 'net TSh must be less than gross once delivery fee is deducted');
   assert.equal(round2(quote.grossTsh - quote.deliveryFeeTsh), quote.finalTsh);
 });
 test('calculateQuote without needsDelivery is unaffected (no gross/fee fields, same result as before)', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'send_tsh', amount: 1000000, settings, rates: RATES });
   assert.equal(quote.needsDelivery, false);
   assert.equal(quote.grossResults, undefined);
 });
 test('delivery fee never pushes a result below zero, even for tiny amounts', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'want_tsh', currency: 'USD', amount: 1, settings, rates: RATES, needsDelivery: true });
   assert.ok(quote.finalTsh >= 0, 'finalTsh must be clamped at 0, never negative');
 });
@@ -247,35 +249,35 @@ console.log('\n11. Reverse lookup: exchanger knows the exact TSh a client needs,
 // of very different magnitude (TL ~50 vs USD/EUR/GBP ~1700-2200).
 test('270,000 TSh in TL: required amount round-trips back to ~270,000 (within rounding)', () => {
   const { requiredAmount, buyRate } = calculateRequiredForeignForTsh({
-    currency: 'TL', targetTsh: 270000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+    currency: 'TL', targetTsh: 270000, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
   });
   assert.ok(Math.abs(requiredAmount * buyRate - 270000) < buyRate, 'requiredAmount * buyRate should land within a rounding cent of the target');
 });
 test('reverse and forward calculations agree with each other', () => {
   const { requiredAmount, buyRate } = calculateRequiredForeignForTsh({
-    currency: 'USD', targetTsh: 500000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+    currency: 'USD', targetTsh: 500000, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
   });
-  const { finalTsh } = calculateForeignToTsh({ currency: 'USD', amount: requiredAmount, rates: RATES, buyMarginPercent: BUY_MARGIN });
+  const { finalTsh } = calculateForeignToTsh({ currency: 'USD', amount: requiredAmount, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH });
   assert.ok(Math.abs(finalTsh - 500000) < buyRate, 'feeding the reverse-calculated amount back through the forward formula should reproduce the target');
 });
 test('with delivery: reverse calculation collects MORE currency, so the client still nets exactly the target after the fee', () => {
   const withoutDelivery = calculateRequiredForeignForTsh({
-    currency: 'USD', targetTsh: 270000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+    currency: 'USD', targetTsh: 270000, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
   });
   const withDelivery = calculateRequiredForeignForTsh({
-    currency: 'USD', targetTsh: 270000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: true,
+    currency: 'USD', targetTsh: 270000, rates: RATES, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: true,
   });
   assert.ok(withDelivery.requiredAmount > withoutDelivery.requiredAmount, 'must collect more currency to still net the same target after the delivery fee is deducted');
 
   const { finalTsh, buyRate } = calculateQuote({
     direction: 'want_tsh', currency: 'USD', amount: withDelivery.requiredAmount,
-    settings: { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL },
+    settings: { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL },
     rates: RATES, needsDelivery: true, mode: 'given',
   });
   assert.ok(Math.abs(finalTsh - 270000) < buyRate, 'client should still net ~270,000 after collecting the reverse-calculated amount and deducting delivery');
 });
 test('calculateQuote mode "target" returns requiredAmount instead of finalTsh', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'want_tsh', currency: 'TL', amount: 270000, settings, rates: RATES, mode: 'target' });
   assert.equal(quote.mode, 'target');
   assert.equal(quote.targetTsh, 270000);
@@ -283,7 +285,7 @@ test('calculateQuote mode "target" returns requiredAmount instead of finalTsh', 
   assert.equal(quote.finalTsh, undefined);
 });
 test('calculateQuote mode "given" (default) is unchanged and still returns finalTsh', () => {
-  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginTlTsh: BUY_MARGIN_TL_TSH, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'want_tsh', currency: 'TL', amount: 100, settings, rates: RATES });
   assert.equal(quote.mode, 'given');
   assert.ok(quote.finalTsh > 0);

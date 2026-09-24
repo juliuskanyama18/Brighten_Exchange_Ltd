@@ -6,10 +6,10 @@ import { formatDate } from '@/utils/formatting';
 
 export default function AnchorSettings({ settings, onUpdate }) {
   const [form, setForm] = useState({
-    buyMarginPercent: settings?.buyMarginPercent ?? 5,
-    marginTlTsh:      settings?.marginTlTsh      ?? 5,
-    deliveryFeeTl:    settings?.deliveryFeeTl    ?? 300,
-    whatsappNumber:   settings?.whatsappNumber   ?? '',
+    buyMarginTlTsh: settings?.buyMarginTlTsh ?? 3,
+    marginTlTsh:    settings?.marginTlTsh    ?? 5,
+    deliveryFeeTl:  settings?.deliveryFeeTl  ?? 300,
+    whatsappNumber: settings?.whatsappNumber ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
@@ -32,10 +32,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   useEffect(() => { loadRates(); }, []);
 
-  const buyMarginPercentNum = Number(form.buyMarginPercent);
+  const buyMarginTlTshNum   = Number(form.buyMarginTlTsh);
   const marginTlTshNum      = Number(form.marginTlTsh);
   const deliveryFeeTlNum    = Number(form.deliveryFeeTl);
-  const buyMarginValid = Number.isFinite(buyMarginPercentNum) && buyMarginPercentNum >= 0 && buyMarginPercentNum < 100;
+  const buyMarginValid = Number.isFinite(buyMarginTlTshNum) && buyMarginTlTshNum >= 0;
   const marginTlTshValid = Number.isFinite(marginTlTshNum) && marginTlTshNum >= 0;
   const deliveryFeeTlValid = Number.isFinite(deliveryFeeTlNum) && deliveryFeeTlNum >= 0;
 
@@ -50,7 +50,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
   // anchor, and USD/EUR/GBP prices are derived from it via the live
   // TL-per-currency cross rate, NOT from their own reference rate directly.
   const tlSellAnchor = tlReference !== null && marginTlTshValid ? tlReference + marginTlTshNum : null;
-  const tlBuyAnchor  = tlReference !== null && buyMarginValid ? tlReference * (1 - buyMarginPercentNum / 100) : null;
+  const tlBuyAnchor  = tlReference !== null && buyMarginValid ? tlReference - buyMarginTlTshNum : null;
 
   const previewRows = ['TL', 'USD', 'EUR', 'GBP'].map((c) => {
     if (c === 'TL') return { currency: c, sell: tlSellAnchor, buy: tlBuyAnchor };
@@ -74,7 +74,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
     // JSON.stringify silently turns NaN into null, and the field would save
     // as null (this previously broke every "I want TSh" quote in production).
     if (!buyMarginValid) {
-      setSaveError('Buy margin (%) must be a number between 0 and 99.');
+      setSaveError('Buy margin (TSh) must be a number of at least 0.');
       return;
     }
     if (!marginTlTshValid) {
@@ -90,10 +90,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
     setSaving(true);
     try {
       const { data } = await axios.put('/api/admin/settings', {
-        buyMarginPercent: buyMarginPercentNum,
-        marginTlTsh:      marginTlTshNum,
-        deliveryFeeTl:    deliveryFeeTlNum,
-        whatsappNumber:   form.whatsappNumber.trim(),
+        buyMarginTlTsh: buyMarginTlTshNum,
+        marginTlTsh:    marginTlTshNum,
+        deliveryFeeTl:  deliveryFeeTlNum,
+        whatsappNumber: form.whatsappNumber.trim(),
       });
       if (data.success) {
         onUpdate(data.settings);
@@ -157,16 +157,19 @@ export default function AnchorSettings({ settings, onUpdate }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              Buy Margin (%) — All Currencies
+              Buy Margin (TSh) — All Currencies
             </label>
             <input
               type="number"
               step="0.5"
-              value={form.buyMarginPercent}
-              onChange={(e) => setForm({ ...form, buyMarginPercent: e.target.value })}
+              value={form.buyMarginTlTsh}
+              onChange={(e) => setForm({ ...form, buyMarginTlTsh: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
-            <p className="text-xs text-slate-400 mt-1">Subtracted from TL's live rate to build the buy anchor. Default: 5</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Flat TSh subtracted from TL's live rate to build the buy anchor. Default: 3
+              {effectiveBuyPercent !== null && ` (≈ -${effectiveBuyPercent.toFixed(1)}% today)`}
+            </p>
           </div>
         </div>
 

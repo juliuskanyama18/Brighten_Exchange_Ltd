@@ -45,7 +45,7 @@ export async function POST(request) {
     await connectDB();
     const settings = await Settings.getSettings();
     const { rates } = await getUsableRates();
-    const buyMarginPercent = settings.buyMarginPercent;
+    const buyMarginTlTsh = settings.buyMarginTlTsh;
     const marginTlTsh = settings.marginTlTsh;
     const deliveryFeeTl = settings.deliveryFeeTl;
 
@@ -100,7 +100,7 @@ export async function POST(request) {
         currency: fromCurrency,
         amount,
         rates,
-        buyMarginPercent,
+        buyMarginTlTsh,
       });
       if (grossTsh === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
