@@ -1,26 +1,20 @@
 import mongoose from 'mongoose';
 
 const SettingsSchema = new mongoose.Schema({
-  // --- Margin (buy/sell spread) ---
+  // --- Margin (TL-anchored buy/sell spread) ---
   // There is NO manually-set anchor anymore (removed 2026-09-25, per business
-  // decision — see git history). Every currency's reference rate now comes
-  // live from ExchangeRate-API: USD/EUR/GBP directly, TL via an implied
-  // TRY->TZS cross-rate (see lib/rates.js). The margin below is applied on
-  // top of that live reference to get the sell/buy price:
-  //   - BUY side (customer sells currency to us) is a percentage for EVERY
-  //     currency, including TL: buyRate = reference*(1-buyMarginPercent/100)
-  //   - SELL side (customer buys currency from us) is a percentage for
-  //     USD/EUR/GBP: sellRate = reference*(1+sellMarginPercent/100)
-  //     ...but TL keeps a FIXED TSh offset instead: sellRate = reference+marginTlTsh
-  //     (at TL's magnitude [~50-60 TSh] a percentage would need constant
-  //     retuning on the sell side; 2026-09-25: TL's BUY side was switched
-  //     to match the same percentage mechanism as USD/EUR/GBP, only its
-  //     SELL side kept the flat-TSh offset.)
-  //   Sell and buy margins are independent of each other on purpose (e.g.
-  //   2026-09-25: buy dropped from 5% to 2.5% while sell stayed at 5%).
-  sellMarginPercent: { type: Number, default: 5, min: 0, max: 99 }, // USD/EUR/GBP, customer buys from us
-  buyMarginPercent:  { type: Number, default: 5, min: 0, max: 99 }, // ALL currencies incl. TL, customer sells to us
-  marginTlTsh:       { type: Number, default: 5, min: 0 },          // TL SELL side only, flat TSh
+  // decision — see git history). TL's live reference rate (an implied
+  // TRY->TZS cross-rate, see lib/rates.js) is marked up/down by TL's own
+  // margin FIRST, and that becomes the anchor every OTHER currency's price
+  // is derived from (2026-09-25: switched from each currency independently
+  // marking up its own live reference — see lib/calc.js for the full
+  // explanation, including why this makes the sell margin for USD/EUR/GBP
+  // move with TL's live rate instead of staying a fixed percentage):
+  //   TL sell anchor = TL reference + marginTlTsh            (flat TSh)
+  //   TL buy anchor  = TL reference * (1 - buyMarginPercent/100)
+  //   USD/EUR/GBP sell/buy = (TL sell/buy anchor) * tlPerUnit(currency)
+  buyMarginPercent: { type: Number, default: 5, min: 0, max: 99 }, // used to build the TL buy anchor; ALL currencies inherit it
+  marginTlTsh:      { type: Number, default: 5, min: 0 },          // used to build the TL sell anchor; ALL currencies inherit it
 
   // --- WhatsApp ---
   whatsappNumber: { type: String, default: '' }, // e.g. +905xxxxxxxxx (international format, no + needed for wa.me but we accept either)

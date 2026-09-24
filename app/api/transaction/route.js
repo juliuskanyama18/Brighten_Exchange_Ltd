@@ -40,7 +40,6 @@ export async function POST(request) {
     await connectDB();
     const settings = await Settings.getSettings();
     const { rates } = await getUsableRates();
-    const sellMarginPercent = settings.sellMarginPercent;
     const buyMarginPercent = settings.buyMarginPercent;
     const marginTlTsh = settings.marginTlTsh;
 
@@ -57,7 +56,7 @@ export async function POST(request) {
       if (!FOREIGN_OR_TL.includes(toCurrency)) {
         return NextResponse.json({ success: false, error: 'Unsupported currency' }, { status: 400 });
       }
-      const { amount: receiveAmount, sellRate } = calculateTshToOne(amount, toCurrency, rates, sellMarginPercent, marginTlTsh);
+      const { amount: receiveAmount, sellRate } = calculateTshToOne(amount, toCurrency, rates, marginTlTsh);
       if (receiveAmount === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
       }
