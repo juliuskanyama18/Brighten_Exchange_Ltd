@@ -1,12 +1,12 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Brighten Exchange Ltd — Smart Currency Exchange Tanzania',
-  description: 'Fast and competitive currency exchange between TZS, USD, GBP, EUR and TRY. Pay via NMB Bank, Airtel Money or Selcom.',
-  keywords: 'currency exchange Tanzania, TZS to USD, TZS to EUR, forex Tanzania, Brighten Exchange',
+  title: 'Brighten Plus — Currency Exchange',
+  description: 'Fast and competitive currency exchange between TZS, TL, USD, GBP and EUR. Pay via NMB Bank, Airtel Money or Selcom.',
+  keywords: 'currency exchange Tanzania, TZS to USD, TZS to EUR, forex Tanzania, Brighten Plus, Brighten Exchange',
   openGraph: {
-    title: 'Brighten Exchange Ltd',
-    description: 'Smart currency exchange platform for Tanzania',
+    title: 'Brighten Plus',
+    description: 'Currency exchange platform for Tanzania and North Cyprus',
     type: 'website',
   },
 };

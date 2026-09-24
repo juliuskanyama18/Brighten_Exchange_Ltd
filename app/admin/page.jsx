@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import axios from 'axios';
+import logo from '@/public/logo.png';
 import AnchorSettings from '@/components/admin/AnchorSettings';
 import PaymentManager from '@/components/admin/PaymentManager';
 import TransactionLogs from '@/components/admin/TransactionLogs';
@@ -72,14 +74,9 @@ export default function AdminDashboard() {
       {/* Top bar */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-gold-400 to-gold-600 rounded-xl flex items-center justify-center">
-              <span className="text-brand-950 text-sm font-black">B</span>
-            </div>
-            <div>
-              <p className="font-bold text-slate-900 dark:text-white text-sm leading-none">Brighten Exchange</p>
-              <p className="text-xs text-slate-500 mt-0.5">Admin Dashboard</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Image src={logo} alt="Brighten Plus" className="h-8 w-auto" />
+            <p className="text-xs text-slate-500 border-l border-slate-200 dark:border-slate-700 pl-2">Admin</p>
           </div>
           <div className="flex items-center gap-3">
             <a href="/" target="_blank" rel="noopener noreferrer"
