@@ -128,7 +128,7 @@ export default function AdminDashboard() {
                 { label: 'Total Transactions', value: stats.total, color: 'text-brand-700 dark:text-gold-400', bg: 'bg-brand-50 dark:bg-brand-900/20' },
                 { label: 'Pending',  value: stats.pending,   color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
                 { label: 'TL Margin', value: `±${settings?.marginTlTsh ?? '—'} TSh`, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-                { label: 'FX Margin', value: `±${settings?.marginPercent ?? '—'}%`, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+                { label: 'FX Margin', value: `+${settings?.sellMarginPercent ?? '—'}% / -${settings?.buyMarginPercent ?? '—'}%`, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
               ].map((stat) => (
                 <div key={stat.label} className={`${stat.bg} rounded-2xl p-5 border border-transparent`}>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{stat.label}</p>
@@ -148,8 +148,12 @@ export default function AdminDashboard() {
                       <span className="font-semibold text-slate-900 dark:text-white">±{settings.marginTlTsh} TSh</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">USD/EUR/GBP Margin</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">±{settings.marginPercent}%</span>
+                      <span className="text-slate-500">USD/EUR/GBP Sell Margin</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">+{settings.sellMarginPercent}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">USD/EUR/GBP Buy Margin</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">-{settings.buyMarginPercent}%</span>
                     </div>
                   </div>
                   <div className="space-y-2">

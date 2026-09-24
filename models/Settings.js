@@ -7,15 +7,19 @@ const SettingsSchema = new mongoose.Schema({
   // live from ExchangeRate-API: USD/EUR/GBP directly, TL via an implied
   // TRY->TZS cross-rate (see lib/rates.js). The margin below is applied on
   // top of that live reference to get the sell/buy price:
-  //   - USD/EUR/GBP: sellRate = reference*(1+marginPercent/100),
-  //                  buyRate  = reference*(1-marginPercent/100)
+  //   - USD/EUR/GBP: sellRate = reference*(1+sellMarginPercent/100)   -- customer buys currency FROM us
+  //                  buyRate  = reference*(1-buyMarginPercent/100)    -- customer sells currency TO us
+  //     (sell and buy margins are independent — e.g. 2026-09-25: buy
+  //     dropped from 5% to 2.5% while sell stayed at 5%, so the two
+  //     directions can be priced differently on purpose.)
   //   - TL:          sellRate = reference + marginTlTsh,
   //                  buyRate  = reference - marginTlTsh
   //     (TL uses a FIXED TSh offset, not a percentage — at TL's magnitude
   //     [~50-60 TSh], a percentage would need constant retuning, whereas a
   //     flat TSh amount is what the business actually thinks in.)
-  marginPercent: { type: Number, default: 5, min: 0, max: 99 },  // for USD/EUR/GBP
-  marginTlTsh:   { type: Number, default: 5, min: 0 },            // for TL, in TSh
+  sellMarginPercent: { type: Number, default: 5, min: 0, max: 99 }, // USD/EUR/GBP, customer buys from us
+  buyMarginPercent:  { type: Number, default: 5, min: 0, max: 99 }, // USD/EUR/GBP, customer sells to us
+  marginTlTsh:       { type: Number, default: 5, min: 0 },          // for TL, in TSh, both directions
 
   // --- WhatsApp ---
   whatsappNumber: { type: String, default: '' }, // e.g. +905xxxxxxxxx (international format, no + needed for wa.me but we accept either)

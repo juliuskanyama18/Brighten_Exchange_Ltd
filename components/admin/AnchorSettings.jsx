@@ -6,9 +6,10 @@ import { formatDate } from '@/utils/formatting';
 
 export default function AnchorSettings({ settings, onUpdate }) {
   const [form, setForm] = useState({
-    marginPercent:  settings?.marginPercent  ?? 5,
-    marginTlTsh:    settings?.marginTlTsh    ?? 5,
-    whatsappNumber: settings?.whatsappNumber ?? '',
+    sellMarginPercent: settings?.sellMarginPercent ?? 5,
+    buyMarginPercent:  settings?.buyMarginPercent  ?? 5,
+    marginTlTsh:       settings?.marginTlTsh       ?? 5,
+    whatsappNumber:    settings?.whatsappNumber    ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
@@ -31,10 +32,12 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   useEffect(() => { loadRates(); }, []);
 
-  const marginPercentNum = Number(form.marginPercent);
-  const marginTlTshNum   = Number(form.marginTlTsh);
-  const marginPercentValid = Number.isFinite(marginPercentNum) && marginPercentNum >= 0 && marginPercentNum < 100;
-  const marginTlTshValid   = Number.isFinite(marginTlTshNum) && marginTlTshNum >= 0;
+  const sellMarginPercentNum = Number(form.sellMarginPercent);
+  const buyMarginPercentNum  = Number(form.buyMarginPercent);
+  const marginTlTshNum       = Number(form.marginTlTsh);
+  const sellMarginValid = Number.isFinite(sellMarginPercentNum) && sellMarginPercentNum >= 0 && sellMarginPercentNum < 100;
+  const buyMarginValid  = Number.isFinite(buyMarginPercentNum) && buyMarginPercentNum >= 0 && buyMarginPercentNum < 100;
+  const marginTlTshValid = Number.isFinite(marginTlTshNum) && marginTlTshNum >= 0;
 
   // Live preview of what each currency's buy/sell price will be, computed
   // the same way lib/calc.js does — so the admin can sanity-check the
@@ -50,11 +53,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
       if (!marginTlTshValid) return { currency: c, sell: null, buy: null };
       return { currency: c, sell: ref + marginTlTshNum, buy: ref - marginTlTshNum };
     }
-    if (!marginPercentValid) return { currency: c, sell: null, buy: null };
     return {
       currency: c,
-      sell: ref * (1 + marginPercentNum / 100),
-      buy:  ref * (1 - marginPercentNum / 100),
+      sell: sellMarginValid ? ref * (1 + sellMarginPercentNum / 100) : null,
+      buy:  buyMarginValid ? ref * (1 - buyMarginPercentNum / 100) : null,
     };
   });
 
@@ -62,8 +64,12 @@ export default function AnchorSettings({ settings, onUpdate }) {
     // Catch a blank/invalid field here — otherwise parseFloat('') = NaN,
     // JSON.stringify silently turns NaN into null, and the field would save
     // as null (this previously broke every "I want TSh" quote in production).
-    if (!marginPercentValid) {
-      setSaveError('Margin (%) must be a number between 0 and 99.');
+    if (!sellMarginValid) {
+      setSaveError('Sell margin (%) must be a number between 0 and 99.');
+      return;
+    }
+    if (!buyMarginValid) {
+      setSaveError('Buy margin (%) must be a number between 0 and 99.');
       return;
     }
     if (!marginTlTshValid) {
@@ -75,9 +81,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
     setSaving(true);
     try {
       const { data } = await axios.put('/api/admin/settings', {
-        marginPercent:  marginPercentNum,
-        marginTlTsh:    marginTlTshNum,
-        whatsappNumber: form.whatsappNumber.trim(),
+        sellMarginPercent: sellMarginPercentNum,
+        buyMarginPercent:  buyMarginPercentNum,
+        marginTlTsh:       marginTlTshNum,
+        whatsappNumber:    form.whatsappNumber.trim(),
       });
       if (data.success) {
         onUpdate(data.settings);
@@ -119,9 +126,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
           There is no manual anchor anymore — every currency's reference rate comes live from ExchangeRate-API
           (TL via an implied TRY→TZS cross-rate, since the API has no direct pair). Your margin below is applied
           on top: when a customer buys currency from you, you charge above the reference; when they sell it to
-          you, you pay below it. This is your entire profit margin — no separate commission or fee on top.
+          you, you pay below it. Sell and buy margins are independent — you can price the two directions
+          differently. This is your entire profit margin — no separate commission or fee on top.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
               TL Margin (TSh)
@@ -133,20 +141,33 @@ export default function AnchorSettings({ settings, onUpdate }) {
               onChange={(e) => setForm({ ...form, marginTlTsh: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
-            <p className="text-xs text-slate-400 mt-1">Flat TSh amount. Default: 5</p>
+            <p className="text-xs text-slate-400 mt-1">Flat TSh, both directions. Default: 5</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              USD/EUR/GBP Margin (%)
+              USD/EUR/GBP Sell Margin (%)
             </label>
             <input
               type="number"
               step="0.5"
-              value={form.marginPercent}
-              onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
+              value={form.sellMarginPercent}
+              onChange={(e) => setForm({ ...form, sellMarginPercent: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
-            <p className="text-xs text-slate-400 mt-1">Percentage. Default: 5</p>
+            <p className="text-xs text-slate-400 mt-1">Customer buys from you. Default: 5</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+              USD/EUR/GBP Buy Margin (%)
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              value={form.buyMarginPercent}
+              onChange={(e) => setForm({ ...form, buyMarginPercent: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+            <p className="text-xs text-slate-400 mt-1">Customer sells to you. Default: 5</p>
           </div>
         </div>
 
