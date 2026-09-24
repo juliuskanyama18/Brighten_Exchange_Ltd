@@ -83,7 +83,6 @@ export async function POST(request) {
         amount,
         rates,
         buyMarginPercent,
-        marginTlTsh,
       });
       if (finalTsh === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });

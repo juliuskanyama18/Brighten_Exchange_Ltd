@@ -7,19 +7,20 @@ const SettingsSchema = new mongoose.Schema({
   // live from ExchangeRate-API: USD/EUR/GBP directly, TL via an implied
   // TRY->TZS cross-rate (see lib/rates.js). The margin below is applied on
   // top of that live reference to get the sell/buy price:
-  //   - USD/EUR/GBP: sellRate = reference*(1+sellMarginPercent/100)   -- customer buys currency FROM us
-  //                  buyRate  = reference*(1-buyMarginPercent/100)    -- customer sells currency TO us
-  //     (sell and buy margins are independent — e.g. 2026-09-25: buy
-  //     dropped from 5% to 2.5% while sell stayed at 5%, so the two
-  //     directions can be priced differently on purpose.)
-  //   - TL:          sellRate = reference + marginTlTsh,
-  //                  buyRate  = reference - marginTlTsh
-  //     (TL uses a FIXED TSh offset, not a percentage — at TL's magnitude
-  //     [~50-60 TSh], a percentage would need constant retuning, whereas a
-  //     flat TSh amount is what the business actually thinks in.)
+  //   - BUY side (customer sells currency to us) is a percentage for EVERY
+  //     currency, including TL: buyRate = reference*(1-buyMarginPercent/100)
+  //   - SELL side (customer buys currency from us) is a percentage for
+  //     USD/EUR/GBP: sellRate = reference*(1+sellMarginPercent/100)
+  //     ...but TL keeps a FIXED TSh offset instead: sellRate = reference+marginTlTsh
+  //     (at TL's magnitude [~50-60 TSh] a percentage would need constant
+  //     retuning on the sell side; 2026-09-25: TL's BUY side was switched
+  //     to match the same percentage mechanism as USD/EUR/GBP, only its
+  //     SELL side kept the flat-TSh offset.)
+  //   Sell and buy margins are independent of each other on purpose (e.g.
+  //   2026-09-25: buy dropped from 5% to 2.5% while sell stayed at 5%).
   sellMarginPercent: { type: Number, default: 5, min: 0, max: 99 }, // USD/EUR/GBP, customer buys from us
-  buyMarginPercent:  { type: Number, default: 5, min: 0, max: 99 }, // USD/EUR/GBP, customer sells to us
-  marginTlTsh:       { type: Number, default: 5, min: 0 },          // for TL, in TSh, both directions
+  buyMarginPercent:  { type: Number, default: 5, min: 0, max: 99 }, // ALL currencies incl. TL, customer sells to us
+  marginTlTsh:       { type: Number, default: 5, min: 0 },          // TL SELL side only, flat TSh
 
   // --- WhatsApp ---
   whatsappNumber: { type: String, default: '' }, // e.g. +905xxxxxxxxx (international format, no + needed for wa.me but we accept either)

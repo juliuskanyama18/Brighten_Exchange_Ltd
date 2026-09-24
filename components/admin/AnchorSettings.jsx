@@ -49,14 +49,17 @@ export default function AnchorSettings({ settings, onUpdate }) {
   const previewRows = ['TL', 'USD', 'EUR', 'GBP'].map((c) => {
     const ref = referenceRate(c);
     if (ref === null) return { currency: c, sell: null, buy: null };
+    // Buy side is percentage-based for every currency, including TL.
+    const buy = buyMarginValid ? ref * (1 - buyMarginPercentNum / 100) : null;
     if (c === 'TL') {
-      if (!marginTlTshValid) return { currency: c, sell: null, buy: null };
-      return { currency: c, sell: ref + marginTlTshNum, buy: ref - marginTlTshNum };
+      // Sell side stays a flat TSh offset for TL only.
+      const sell = marginTlTshValid ? ref + marginTlTshNum : null;
+      return { currency: c, sell, buy };
     }
     return {
       currency: c,
       sell: sellMarginValid ? ref * (1 + sellMarginPercentNum / 100) : null,
-      buy:  buyMarginValid ? ref * (1 - buyMarginPercentNum / 100) : null,
+      buy,
     };
   });
 
@@ -126,13 +129,15 @@ export default function AnchorSettings({ settings, onUpdate }) {
           There is no manual anchor anymore — every currency's reference rate comes live from ExchangeRate-API
           (TL via an implied TRY→TZS cross-rate, since the API has no direct pair). Your margin below is applied
           on top: when a customer buys currency from you, you charge above the reference; when they sell it to
-          you, you pay below it. Sell and buy margins are independent — you can price the two directions
-          differently. This is your entire profit margin — no separate commission or fee on top.
+          you, you pay below it. <strong>Buy Margin (%) applies to all four currencies</strong>, including TL.
+          <strong>TL Sell Margin</strong> is the one exception — a flat TSh amount instead of a percentage, since
+          a percentage would need constant retuning at TL's magnitude. Sell and buy are priced independently.
+          This is your entire profit margin — no separate commission or fee on top.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl">
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              TL Margin (TSh)
+              TL Sell Margin (TSh)
             </label>
             <input
               type="number"
@@ -141,7 +146,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
               onChange={(e) => setForm({ ...form, marginTlTsh: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
-            <p className="text-xs text-slate-400 mt-1">Flat TSh, both directions. Default: 5</p>
+            <p className="text-xs text-slate-400 mt-1">Flat TSh. Customer buys TL from you. Default: 5</p>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
@@ -158,7 +163,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              USD/EUR/GBP Buy Margin (%)
+              Buy Margin (%) — All Currencies
             </label>
             <input
               type="number"
@@ -167,7 +172,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
               onChange={(e) => setForm({ ...form, buyMarginPercent: e.target.value })}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
             />
-            <p className="text-xs text-slate-400 mt-1">Customer sells to you. Default: 5</p>
+            <p className="text-xs text-slate-400 mt-1">Customer sells TL, USD, EUR or GBP to you. Default: 5</p>
           </div>
         </div>
 
