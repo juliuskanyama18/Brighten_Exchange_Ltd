@@ -58,7 +58,6 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       ...quote,
-      anchorTshPerTl: settings.anchorTshPerTl,
       ratesLastFetchedAt: lastFetchedAt,
       ratesAvailable: hasAnyRates,
     });

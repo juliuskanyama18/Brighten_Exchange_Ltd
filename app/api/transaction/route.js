@@ -5,7 +5,7 @@ import Transaction from '@/models/Transaction';
 import Customer from '@/models/Customer';
 import Payment from '@/models/Payment';
 import { getUsableRates } from '@/lib/rates';
-import { calculateTshToOne, calculateForeignToTsh, parseAmount, QuoteError } from '@/lib/calc';
+import { calculateTshToOne, calculateForeignToTsh, getReferenceRate, parseAmount, QuoteError } from '@/lib/calc';
 
 const FOREIGN_OR_TL = ['TL', 'USD', 'EUR', 'GBP'];
 
@@ -40,8 +40,8 @@ export async function POST(request) {
     await connectDB();
     const settings = await Settings.getSettings();
     const { rates } = await getUsableRates();
-    const anchorTshPerTl = settings.anchorTshPerTl;
     const marginPercent = settings.marginPercent;
+    const marginTlTsh = settings.marginTlTsh;
 
     const customer = await Customer.findOrCreate({
       name: customerName.trim(),
@@ -56,7 +56,7 @@ export async function POST(request) {
       if (!FOREIGN_OR_TL.includes(toCurrency)) {
         return NextResponse.json({ success: false, error: 'Unsupported currency' }, { status: 400 });
       }
-      const { amount: receiveAmount, sellRate } = calculateTshToOne(amount, toCurrency, anchorTshPerTl, rates, marginPercent);
+      const { amount: receiveAmount, sellRate } = calculateTshToOne(amount, toCurrency, rates, marginPercent, marginTlTsh);
       if (receiveAmount === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
       }
@@ -68,8 +68,7 @@ export async function POST(request) {
         receiveCurrency: BUSINESS_TO_DB[toCurrency],
         sendAmount: amount,
         receiveAmount,
-        anchorTshPerTl,
-        marginPercent,
+        referenceRate: getReferenceRate(toCurrency, rates),
         rateUsed: sellRate,
       };
     } else {
@@ -81,9 +80,9 @@ export async function POST(request) {
       const { finalTsh, buyRate } = calculateForeignToTsh({
         currency: fromCurrency,
         amount,
-        anchorTshPerTl,
         rates,
         marginPercent,
+        marginTlTsh,
       });
       if (finalTsh === null) {
         return NextResponse.json({ success: false, error: 'Rates not available yet. Please try again later.' }, { status: 409 });
@@ -96,8 +95,7 @@ export async function POST(request) {
         receiveCurrency: 'TZS',
         sendAmount: amount,
         receiveAmount: finalTsh,
-        anchorTshPerTl,
-        marginPercent,
+        referenceRate: getReferenceRate(fromCurrency, rates),
         rateUsed: buyRate,
       };
     }

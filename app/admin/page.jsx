@@ -127,8 +127,8 @@ export default function AdminDashboard() {
               {[
                 { label: 'Total Transactions', value: stats.total, color: 'text-brand-700 dark:text-gold-400', bg: 'bg-brand-50 dark:bg-brand-900/20' },
                 { label: 'Pending',  value: stats.pending,   color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-                { label: 'Anchor (1 TL)', value: `${settings?.anchorTshPerTl ?? '—'} TSh`, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-                { label: 'Margin', value: `±${settings?.marginPercent ?? '—'}%`, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+                { label: 'TL Margin', value: `±${settings?.marginTlTsh ?? '—'} TSh`, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+                { label: 'FX Margin', value: `±${settings?.marginPercent ?? '—'}%`, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
               ].map((stat) => (
                 <div key={stat.label} className={`${stat.bg} rounded-2xl p-5 border border-transparent`}>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{stat.label}</p>
@@ -144,11 +144,11 @@ export default function AdminDashboard() {
                 <div className="grid sm:grid-cols-2 gap-4 text-sm">
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Anchor</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">1 TL = {settings.anchorTshPerTl} TSh</span>
+                      <span className="text-slate-500">TL Margin</span>
+                      <span className="font-semibold text-slate-900 dark:text-white">±{settings.marginTlTsh} TSh</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Margin</span>
+                      <span className="text-slate-500">USD/EUR/GBP Margin</span>
                       <span className="font-semibold text-slate-900 dark:text-white">±{settings.marginPercent}%</span>
                     </div>
                   </div>
@@ -179,7 +179,7 @@ export default function AdminDashboard() {
         {/* Settings */}
         {activeTab === 'settings' && settings && (
           <div className="animate-fade-in">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-5">Anchor, Commission &amp; Fees</h2>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-5">Margin Settings</h2>
             <AnchorSettings settings={settings} onUpdate={setSettings} />
           </div>
         )}

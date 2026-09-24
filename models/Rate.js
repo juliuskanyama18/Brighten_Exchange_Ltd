@@ -12,6 +12,8 @@ const RateSchema = new mongoose.Schema({
   USD: { type: CurrencyRateSchema, default: () => ({}) },
   EUR: { type: CurrencyRateSchema, default: () => ({}) },
   GBP: { type: CurrencyRateSchema, default: () => ({}) },
+  // Implied live TL/TZS cross-rate (tlPerUnit unused/null here — TRY per TRY is 1)
+  TRY: { type: CurrencyRateSchema, default: () => ({}) },
 
   lastFetchedAt:  { type: Date,   default: null }, // last SUCCESSFUL fetch
   lastAttemptAt:  { type: Date,   default: null },

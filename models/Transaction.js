@@ -14,10 +14,10 @@ const TransactionSchema = new mongoose.Schema({
   receiveAmount:   { type: Number, required: true, min: 0 },
 
   // Rates/settings snapshot at the time of quote — for audit/history, never
-  // recomputed retroactively if the admin later changes the anchor/margin.
-  anchorTshPerTl: { type: Number, required: true }, // Brighten TL reference rate used
-  marginPercent:  { type: Number, required: true }, // margin applied at quote time
-  rateUsed:       { type: Number, required: true }, // the actual sell (send_tsh) or buy (want_tsh) rate applied
+  // recomputed retroactively if the admin later changes the margin or the
+  // live reference rate moves.
+  referenceRate: { type: Number, required: true }, // live reference rate (pre-margin) at quote time
+  rateUsed:      { type: Number, required: true },  // the actual sell (send_tsh) or buy (want_tsh) rate applied
 
   status: {
     type: String,

@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 const ALLOWED_FIELDS = [
-  'anchorTshPerTl', 'marginPercent',
+  'marginPercent', 'marginTlTsh',
   'whatsappNumber', 'paymentDetails', 'displayName',
 ];
 
@@ -24,18 +24,19 @@ const ALLOWED_FIELDS = [
 // NOT enforce `min` against an explicit null (only against out-of-range
 // numbers), so without this check a cleared field would silently save as
 // null and break every conversion that divides/multiplies by it — exactly
-// what happened to anchorTshPerTl in production (2026-09-25).
+// what happened to anchorTshPerTl in production (2026-09-25, before it was
+// removed entirely in favor of a fully live TL reference rate).
 function validateNumericFields(body) {
   const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
-  if (body.anchorTshPerTl !== undefined) {
-    if (!isFiniteNumber(body.anchorTshPerTl) || body.anchorTshPerTl < 1) {
-      return 'Anchor rate must be a number of at least 1';
-    }
-  }
   if (body.marginPercent !== undefined) {
     if (!isFiniteNumber(body.marginPercent) || body.marginPercent < 0 || body.marginPercent >= 100) {
-      return 'Margin must be a number between 0 and 99';
+      return 'Margin (%) must be a number between 0 and 99';
+    }
+  }
+  if (body.marginTlTsh !== undefined) {
+    if (!isFiniteNumber(body.marginTlTsh) || body.marginTlTsh < 0) {
+      return 'TL margin must be a number of at least 0';
     }
   }
   return null;
