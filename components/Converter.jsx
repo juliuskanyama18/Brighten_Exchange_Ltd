@@ -195,6 +195,11 @@ export default function Converter({ paymentDetails }) {
           I Want TSh
         </button>
       </div>
+      <p className="text-center text-xs text-slate-500 dark:text-slate-400 -mt-2">
+        {tab === 'send'
+          ? 'You have Tanzanian Shillings and want TL, USD, EUR or GBP'
+          : 'You have TL, USD, EUR or GBP and want Tanzanian Shillings'}
+      </p>
 
       {tab === 'send' ? (
         <div className="space-y-5">

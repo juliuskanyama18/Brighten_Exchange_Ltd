@@ -14,6 +14,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
   });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [rates, setRates] = useState(null);
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -37,14 +38,35 @@ export default function AnchorSettings({ settings, onUpdate }) {
     : 0;
 
   const handleSave = async () => {
+    // Catch a blank/invalid field here — otherwise parseFloat('') = NaN,
+    // JSON.stringify silently turns NaN into null, and the field would save
+    // as null (this previously broke every "I want TSh" quote in production).
+    const anchorTshPerTl = parseFloat(form.anchorTshPerTl);
+    const commissionTl   = parseFloat(form.commissionTl);
+    const sendingFeeValue = parseFloat(form.sendingFeeValue);
+
+    if (!Number.isFinite(anchorTshPerTl) || anchorTshPerTl < 1) {
+      setSaveError('Anchor rate must be a number of at least 1 — it looks empty or invalid.');
+      return;
+    }
+    if (!Number.isFinite(commissionTl) || commissionTl < 0) {
+      setSaveError('Commission must be a number of at least 0.');
+      return;
+    }
+    if (!Number.isFinite(sendingFeeValue) || sendingFeeValue < 0) {
+      setSaveError('Sending fee value must be a number of at least 0.');
+      return;
+    }
+
+    setSaveError('');
     setSaving(true);
     try {
       const { data } = await axios.put('/api/admin/settings', {
-        anchorTshPerTl: parseFloat(form.anchorTshPerTl),
-        commissionTl:   parseFloat(form.commissionTl),
+        anchorTshPerTl,
+        commissionTl,
         sendingFee: {
           type:  form.sendingFeeType,
-          value: parseFloat(form.sendingFeeValue),
+          value: sendingFeeValue,
         },
         whatsappNumber: form.whatsappNumber.trim(),
       });
@@ -52,7 +74,11 @@ export default function AnchorSettings({ settings, onUpdate }) {
         onUpdate(data.settings);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
+      } else {
+        setSaveError(data.error || 'Failed to save settings');
       }
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -174,6 +200,11 @@ export default function AnchorSettings({ settings, onUpdate }) {
       </div>
 
       {/* Save button */}
+      {saveError && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+          {saveError}
+        </div>
+      )}
       <button
         onClick={handleSave}
         disabled={saving}

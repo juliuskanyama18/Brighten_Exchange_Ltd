@@ -19,9 +19,46 @@ const ALLOWED_FIELDS = [
   'whatsappNumber', 'paymentDetails', 'displayName',
 ];
 
+// A blank/invalid number field in the admin form becomes NaN client-side,
+// and JSON.stringify silently turns NaN into null on the wire. Mongoose does
+// NOT enforce `min` against an explicit null (only against out-of-range
+// numbers), so without this check a cleared field would silently save as
+// null and break every conversion that divides/multiplies by it — exactly
+// what happened to anchorTshPerTl in production (2026-09-25).
+function validateNumericFields(body) {
+  const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  if (body.anchorTshPerTl !== undefined) {
+    if (!isFiniteNumber(body.anchorTshPerTl) || body.anchorTshPerTl < 1) {
+      return 'Anchor rate must be a number of at least 1';
+    }
+  }
+  if (body.commissionTl !== undefined) {
+    if (!isFiniteNumber(body.commissionTl) || body.commissionTl < 0) {
+      return 'Commission must be a number of at least 0';
+    }
+  }
+  if (body.sendingFee !== undefined) {
+    const { type, value } = body.sendingFee || {};
+    if (!['flat', 'percentage'].includes(type)) {
+      return 'Sending fee type must be "flat" or "percentage"';
+    }
+    if (!isFiniteNumber(value) || value < 0) {
+      return 'Sending fee value must be a number of at least 0';
+    }
+  }
+  return null;
+}
+
 async function updateSettings(request) {
   try {
     const body = await request.json();
+
+    const validationError = validateNumericFields(body);
+    if (validationError) {
+      return NextResponse.json({ success: false, error: validationError }, { status: 400 });
+    }
+
     await connectDB();
 
     const settings = await Settings.getSettings();
