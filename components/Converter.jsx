@@ -59,6 +59,9 @@ export default function Converter({ paymentDetails }) {
   const [sendError, setSendError] = useState('');
 
   // ---- Tab 2: Client wants TSh ----
+  // mode 'given'  = client hands over a known amount, we compute the TSh they get
+  // mode 'target' = client needs an EXACT TSh amount, we compute what to collect
+  const [wantMode, setWantMode] = useState('given');
   const [wantCurrency, setWantCurrency] = useState('USD');
   const [wantAmount, setWantAmount] = useState('');
   const [wantResult, setWantResult] = useState(null); // full /api/quote response
@@ -104,7 +107,7 @@ export default function Converter({ paymentDetails }) {
     }
   }, []);
 
-  const fetchWantQuote = useCallback(async (currency, amount, delivery) => {
+  const fetchWantQuote = useCallback(async (currency, amount, delivery, mode) => {
     const clean = amount.replace(/,/g, '');
     if (!clean || parseFloat(clean) <= 0) {
       setWantResult(null);
@@ -113,7 +116,7 @@ export default function Converter({ paymentDetails }) {
     setWantLoading(true);
     setWantError('');
     try {
-      const { data } = await axios.post('/api/quote', { direction: 'want_tsh', currency, amount: clean, needsDelivery: delivery });
+      const { data } = await axios.post('/api/quote', { direction: 'want_tsh', currency, amount: clean, needsDelivery: delivery, mode });
       if (data.success) {
         setWantResult(data);
       } else {
@@ -133,10 +136,10 @@ export default function Converter({ paymentDetails }) {
     if (tab === 'send') {
       debounceRef.current = setTimeout(() => fetchSendQuote(tshAmount, needsDelivery), 500);
     } else {
-      debounceRef.current = setTimeout(() => fetchWantQuote(wantCurrency, wantAmount, needsDelivery), 500);
+      debounceRef.current = setTimeout(() => fetchWantQuote(wantCurrency, wantAmount, needsDelivery, wantMode), 500);
     }
     return () => clearTimeout(debounceRef.current);
-  }, [tab, tshAmount, wantCurrency, wantAmount, needsDelivery, fetchSendQuote, fetchWantQuote]);
+  }, [tab, tshAmount, wantCurrency, wantAmount, needsDelivery, wantMode, fetchSendQuote, fetchWantQuote]);
 
   const handleSwitchTab = (next) => {
     setTab(next);
@@ -164,6 +167,20 @@ export default function Converter({ paymentDetails }) {
 
   const handleGetQuoteWant = () => {
     if (!wantResult) return;
+    if (wantResult.mode === 'target') {
+      setQuote({
+        direction: 'want_tsh',
+        fromCurrency: wantCurrency,
+        toCurrency: 'TZS',
+        sendAmount: wantResult.requiredAmount,
+        receiveAmount: wantResult.targetTsh,
+        rateUsed: wantResult.buyRate,
+        needsDelivery: wantResult.needsDelivery,
+        grossAmount: wantResult.grossTshNeeded ?? wantResult.targetTsh,
+        deliveryFeeAmount: wantResult.deliveryFeeTsh ?? 0,
+      });
+      return;
+    }
     setQuote({
       direction: 'want_tsh',
       fromCurrency: wantCurrency,
@@ -183,6 +200,13 @@ export default function Converter({ paymentDetails }) {
     setSendQuote(null);
     setWantAmount('');
     setWantResult(null);
+  };
+
+  const handleSwitchWantMode = (nextMode) => {
+    setWantMode(nextMode);
+    setWantAmount('');
+    setWantResult(null);
+    setWantError('');
   };
 
   if (quote) {
@@ -303,40 +327,94 @@ export default function Converter({ paymentDetails }) {
         </div>
       ) : (
         <div className="space-y-5">
-          {/* Client Sends (foreign currency) */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              Client Sends
-            </label>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
+          {/* Given vs Target mode */}
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 text-xs">
+            <button
+              onClick={() => handleSwitchWantMode('given')}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                wantMode === 'given'
+                  ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              Client Gives an Amount
+            </button>
+            <button
+              onClick={() => handleSwitchWantMode('target')}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                wantMode === 'target'
+                  ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              Client Needs Exact TSh
+            </button>
+          </div>
+
+          {wantMode === 'given' ? (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Client Sends
+              </label>
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={wantAmount}
+                      onChange={(e) => setWantAmount(formatNumberInput(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
+                    />
+                  </div>
+                  <div className="w-32 sm:w-36 shrink-0">
+                    <CurrencySelector
+                      value={wantCurrency}
+                      onChange={setWantCurrency}
+                      currencies={FOREIGN_CURRENCIES}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Client Needs (TSh)
+                </label>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
                   <input
                     type="text"
                     inputMode="decimal"
                     value={wantAmount}
                     onChange={(e) => setWantAmount(formatNumberInput(e.target.value))}
-                    placeholder="0.00"
+                    placeholder="0"
                     className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
                   />
-                </div>
-                <div className="w-32 sm:w-36 shrink-0">
-                  <CurrencySelector
-                    value={wantCurrency}
-                    onChange={setWantCurrency}
-                    currencies={FOREIGN_CURRENCIES}
-                  />
+                  <p className="text-xs text-slate-400 mt-1">{currencyFlag('TZS')} exact TSh the client walks away with</p>
                 </div>
               </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  Collect Payment In
+                </label>
+                <CurrencySelector
+                  value={wantCurrency}
+                  onChange={setWantCurrency}
+                  currencies={FOREIGN_CURRENCIES}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
 
-          {/* Exchanger Gives */}
+          {/* Result */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              Exchanger Gives
+              {wantMode === 'given' ? 'Exchanger Gives' : 'Collect From Client'}
             </label>
             {wantLoading ? (
               <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
@@ -345,6 +423,29 @@ export default function Converter({ paymentDetails }) {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                 </svg>
                 Calculating…
+              </div>
+            ) : wantResult && wantResult.mode === 'target' ? (
+              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Our rate</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">
+                    1 {currencyDisplayLabel(wantCurrency)} = {formatAmount(wantResult.buyRate, 'TZS')}
+                  </span>
+                </div>
+                {wantResult.needsDelivery && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Includes delivery fee</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">+{formatAmount(wantResult.deliveryFeeTsh, 'TZS')} worth</span>
+                  </div>
+                )}
+                <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Collect</span>
+                  <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {formatAmount(wantResult.requiredAmount, wantCurrency)}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">so the client nets exactly {formatAmount(wantResult.targetTsh, 'TZS')}</p>
               </div>
             ) : wantResult ? (
               <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2">

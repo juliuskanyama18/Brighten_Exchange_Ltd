@@ -13,6 +13,7 @@ import {
   calculateTshToOne,
   calculateTshToAll,
   calculateForeignToTsh,
+  calculateRequiredForeignForTsh,
   calculateQuote,
   convertDeliveryFeeToForeign,
   convertDeliveryFeeToTsh,
@@ -236,6 +237,57 @@ test('delivery fee never pushes a result below zero, even for tiny amounts', () 
   const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
   const quote = calculateQuote({ direction: 'want_tsh', currency: 'USD', amount: 1, settings, rates: RATES, needsDelivery: true });
   assert.ok(quote.finalTsh >= 0, 'finalTsh must be clamped at 0, never negative');
+});
+
+console.log('\n11. Reverse lookup: exchanger knows the exact TSh a client needs, solve for how much currency to collect');
+// Rounding the required amount to 2dp (necessary -- you can't type more
+// precision into a real form) can shift the reproduced TSh by at most half
+// a cent's worth of the buy rate. Tolerance scales with the rate itself
+// rather than a fixed number, so this stays meaningful across currencies
+// of very different magnitude (TL ~50 vs USD/EUR/GBP ~1700-2200).
+test('270,000 TSh in TL: required amount round-trips back to ~270,000 (within rounding)', () => {
+  const { requiredAmount, buyRate } = calculateRequiredForeignForTsh({
+    currency: 'TL', targetTsh: 270000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+  });
+  assert.ok(Math.abs(requiredAmount * buyRate - 270000) < buyRate, 'requiredAmount * buyRate should land within a rounding cent of the target');
+});
+test('reverse and forward calculations agree with each other', () => {
+  const { requiredAmount, buyRate } = calculateRequiredForeignForTsh({
+    currency: 'USD', targetTsh: 500000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+  });
+  const { finalTsh } = calculateForeignToTsh({ currency: 'USD', amount: requiredAmount, rates: RATES, buyMarginPercent: BUY_MARGIN });
+  assert.ok(Math.abs(finalTsh - 500000) < buyRate, 'feeding the reverse-calculated amount back through the forward formula should reproduce the target');
+});
+test('with delivery: reverse calculation collects MORE currency, so the client still nets exactly the target after the fee', () => {
+  const withoutDelivery = calculateRequiredForeignForTsh({
+    currency: 'USD', targetTsh: 270000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+  });
+  const withDelivery = calculateRequiredForeignForTsh({
+    currency: 'USD', targetTsh: 270000, rates: RATES, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: true,
+  });
+  assert.ok(withDelivery.requiredAmount > withoutDelivery.requiredAmount, 'must collect more currency to still net the same target after the delivery fee is deducted');
+
+  const { finalTsh, buyRate } = calculateQuote({
+    direction: 'want_tsh', currency: 'USD', amount: withDelivery.requiredAmount,
+    settings: { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL },
+    rates: RATES, needsDelivery: true, mode: 'given',
+  });
+  assert.ok(Math.abs(finalTsh - 270000) < buyRate, 'client should still net ~270,000 after collecting the reverse-calculated amount and deducting delivery');
+});
+test('calculateQuote mode "target" returns requiredAmount instead of finalTsh', () => {
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'want_tsh', currency: 'TL', amount: 270000, settings, rates: RATES, mode: 'target' });
+  assert.equal(quote.mode, 'target');
+  assert.equal(quote.targetTsh, 270000);
+  assert.ok(quote.requiredAmount > 0);
+  assert.equal(quote.finalTsh, undefined);
+});
+test('calculateQuote mode "given" (default) is unchanged and still returns finalTsh', () => {
+  const settings = { marginTlTsh: MARGIN_TL_TSH, buyMarginPercent: BUY_MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'want_tsh', currency: 'TL', amount: 100, settings, rates: RATES });
+  assert.equal(quote.mode, 'given');
+  assert.ok(quote.finalTsh > 0);
+  assert.equal(quote.requiredAmount, undefined);
 });
 
 // round2 isn't exported, so mirror it locally for the assertions above.

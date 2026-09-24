@@ -12,11 +12,14 @@ const CURRENCIES = ['TL', 'USD', 'EUR', 'GBP'];
 // POST /api/quote — the SERVER is the source of truth for every quote.
 // The frontend must never calculate the final numbers itself.
 //
-// body: { direction: 'send_tsh' | 'want_tsh', amount, currency?, needsDelivery? }
+// body: { direction: 'send_tsh' | 'want_tsh', amount, currency?, needsDelivery?, mode? }
 //   send_tsh: amount = TSh the customer is sending. Returns TL/USD/EUR/GBP,
 //             each computed at our SELL rate.
-//   want_tsh: currency = TL/USD/EUR/GBP the customer is giving. Returns the
-//             final TSh, computed at our BUY rate.
+//   want_tsh: currency = TL/USD/EUR/GBP the customer is giving.
+//     mode 'given' (default): amount = what the client is handing over.
+//             Returns the final TSh, computed at our BUY rate.
+//     mode 'target': amount = the exact TSh the client needs to walk away
+//             with. Returns how much of `currency` to collect from them.
 //   needsDelivery: if true, deducts the delivery fee (settings.deliveryFeeTl,
 //             converted into whatever the client is receiving) from the result.
 export async function POST(request) {
@@ -24,6 +27,7 @@ export async function POST(request) {
     const body = await request.json();
     const { direction, currency } = body;
     const needsDelivery = Boolean(body.needsDelivery);
+    const mode = body.mode === 'target' ? 'target' : 'given';
 
     if (!DIRECTIONS.includes(direction)) {
       return NextResponse.json({ success: false, error: 'Invalid direction' }, { status: 400 });
@@ -50,7 +54,7 @@ export async function POST(request) {
     // throwing, EXCEPT for want_tsh in a foreign currency, where it throws.
     let quote;
     try {
-      quote = calculateQuote({ direction, currency, amount, settings, rates, needsDelivery });
+      quote = calculateQuote({ direction, currency, amount, settings, rates, needsDelivery, mode });
     } catch (err) {
       if (err instanceof QuoteError) {
         return NextResponse.json({ success: false, error: err.message }, { status: 409 });
