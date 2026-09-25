@@ -51,6 +51,9 @@ export default function Converter({ paymentDetails }) {
   const [quote, setQuote] = useState(null);
   const [needsDelivery, setNeedsDelivery] = useState(false);
   const [deliveryFeeTl, setDeliveryFeeTl] = useState(null);
+  // Rate transparency + disclaimer are collapsed by default so the core
+  // calculator fits on a phone screen without scrolling — still one tap away.
+  const [showInfo, setShowInfo] = useState(false);
 
   // ---- Tab 1: Client sends TSh ----
   const [tshAmount, setTshAmount] = useState('');
@@ -221,12 +224,12 @@ export default function Converter({ paymentDetails }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3.5">
       {/* Tabs */}
       <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
         <button
           onClick={() => handleSwitchTab('send')}
-          className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
             tab === 'send'
               ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -236,7 +239,7 @@ export default function Converter({ paymentDetails }) {
         </button>
         <button
           onClick={() => handleSwitchTab('want')}
-          className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
             tab === 'want'
               ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
               : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -252,13 +255,13 @@ export default function Converter({ paymentDetails }) {
       </p>
 
       {tab === 'send' ? (
-        <div className="space-y-5">
+        <div className="space-y-3.5">
           {/* Client Sends */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
               Client Sends
             </label>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
               <div className="flex items-center gap-3">
                 <div className="flex-1">
                   <input
@@ -283,7 +286,7 @@ export default function Converter({ paymentDetails }) {
               Exchanger Gives
             </label>
             {sendLoading ? (
-              <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
+              <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-sm">
                 <svg className="animate-spin w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -297,7 +300,7 @@ export default function Converter({ paymentDetails }) {
                   return (
                     <div
                       key={c}
-                      className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4"
+                      className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5"
                     >
                       <div className="min-w-0">
                         <p className="text-xs text-slate-400">{currencyFlag(c)} {c}</p>
@@ -326,7 +329,7 @@ export default function Converter({ paymentDetails }) {
           )}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3.5">
           {/* Given vs Target mode */}
           <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 text-xs">
             <button
@@ -356,7 +359,7 @@ export default function Converter({ paymentDetails }) {
               <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                 Client Sends
               </label>
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <input
@@ -384,7 +387,7 @@ export default function Converter({ paymentDetails }) {
                 <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                   Client Needs (TSh)
                 </label>
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
                   <input
                     type="text"
                     inputMode="decimal"
@@ -417,7 +420,7 @@ export default function Converter({ paymentDetails }) {
               {wantMode === 'given' ? 'Exchanger Gives' : 'Collect From Client'}
             </label>
             {wantLoading ? (
-              <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-sm">
+              <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-sm">
                 <svg className="animate-spin w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -425,7 +428,7 @@ export default function Converter({ paymentDetails }) {
                 Calculating…
               </div>
             ) : wantResult && wantResult.mode === 'target' ? (
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2">
+              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Our rate</span>
                   <span className="font-semibold text-slate-900 dark:text-white">
@@ -448,7 +451,7 @@ export default function Converter({ paymentDetails }) {
                 <p className="text-xs text-slate-400">so the client nets exactly {formatAmount(wantResult.targetTsh, 'TZS')}</p>
               </div>
             ) : wantResult ? (
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-2">
+              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Our rate</span>
                   <span className="font-semibold text-slate-900 dark:text-white">
@@ -487,18 +490,30 @@ export default function Converter({ paymentDetails }) {
           <button
             onClick={handleGetQuoteWant}
             disabled={!wantResult || wantLoading}
-            className="w-full py-4 rounded-2xl text-base font-bold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 active:from-gold-600 active:to-gold-800 text-brand-950 shadow-lg shadow-gold-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+            className="w-full py-3.5 rounded-2xl text-base font-bold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 active:from-gold-600 active:to-gold-800 text-brand-950 shadow-lg shadow-gold-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
           >
             Get Quote →
           </button>
         </div>
       )}
 
-      <RatesFooter ratesInfo={ratesInfo} />
-
-      <p className="text-center text-xs text-slate-400 dark:text-slate-500">
-        Estimate only — final amount is confirmed at the time of transaction.
-      </p>
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={() => setShowInfo((v) => !v)}
+          className="text-xs text-slate-400 dark:text-slate-500 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
+        >
+          {showInfo ? 'Hide rate info' : 'ⓘ Rate info'}
+        </button>
+        {showInfo && (
+          <div className="mt-2 space-y-1">
+            <RatesFooter ratesInfo={ratesInfo} />
+            <p className="text-center text-xs text-slate-400 dark:text-slate-500">
+              Estimate only — final amount is confirmed at the time of transaction.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

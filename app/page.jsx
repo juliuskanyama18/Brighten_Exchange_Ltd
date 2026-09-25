@@ -45,26 +45,29 @@ export default async function HomePage() {
   const paymentDetails = await getPaymentDetails();
 
   return (
-    <main className="min-h-screen bg-brand-950 flex flex-col">
+    <main className="h-dvh bg-brand-950 flex flex-col overflow-hidden">
       {/* Header — logo only, the image already carries the full brand + tagline */}
-      <header className="border-b border-gold-500/20 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="max-w-md mx-auto px-4 py-3 flex justify-center">
-          <Image src={logo} alt="Brighten Plus" priority className="h-16 w-auto" />
+      <header className="shrink-0 border-b border-gold-500/20 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <div className="max-w-md mx-auto px-4 py-1.5 sm:py-3 flex justify-center">
+          <Image src={logo} alt="Brighten Plus" priority className="h-11 sm:h-16 w-auto" />
         </div>
       </header>
 
-      {/* The tool — this IS the page */}
-      <section className="flex-1 px-4 py-6 sm:py-8">
+      {/* The tool — this IS the page. min-h-0 lets this shrink inside the flex
+          column instead of pushing the footer off-screen; overflow-y-auto is
+          a fallback for the rare screen too short to fit everything, so THAT
+          area scrolls instead of the whole page. */}
+      <section className="flex-1 min-h-0 overflow-y-auto px-4 py-2 sm:py-8">
         <div className="w-full max-w-md mx-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl p-5 sm:p-6 border border-white/10">
-            <h1 className="text-lg font-black text-slate-900 dark:text-white mb-4">Currency Exchange</h1>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl p-3.5 sm:p-6 border border-white/10">
+            <h1 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mb-2 sm:mb-4">Currency Exchange</h1>
             <Converter paymentDetails={paymentDetails} />
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] text-center text-slate-500 text-xs">
+      <footer className="shrink-0 px-4 py-1 pb-[max(0.375rem,env(safe-area-inset-bottom))] text-center text-slate-500 text-[11px] sm:text-xs">
         <p>© {new Date().getFullYear()} Brighten Plus · North Cyprus</p>
       </footer>
     </main>
