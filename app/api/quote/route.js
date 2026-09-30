@@ -13,11 +13,16 @@ const CURRENCIES = ['TL', 'USD', 'EUR', 'GBP'];
 // The frontend must never calculate the final numbers itself.
 //
 // body: { direction: 'send_tsh' | 'want_tsh', amount, currency?, needsDelivery?, mode? }
-//   send_tsh: amount = TSh the customer is sending. Returns TL/USD/EUR/GBP,
-//             each computed at our SELL rate.
-//   want_tsh: currency = TL/USD/EUR/GBP the customer is giving.
+//   send_tsh: customer gives TSh, receives currency (our SELL rate).
+//     mode 'given' (default): amount = TSh the customer is sending, no
+//             currency needed. Returns TL/USD/EUR/GBP all at once.
+//     mode 'target': currency required. amount = the exact amount of
+//             `currency` the client wants to walk away with. Returns how
+//             much TSh to hand over.
+//   want_tsh: customer gives `currency` (TL/USD/EUR/GBP), receives TSh
+//             (our BUY rate). currency always required.
 //     mode 'given' (default): amount = what the client is handing over.
-//             Returns the final TSh, computed at our BUY rate.
+//             Returns the final TSh.
 //     mode 'target': amount = the exact TSh the client needs to walk away
 //             with. Returns how much of `currency` to collect from them.
 //   needsDelivery: if true, deducts the delivery fee (settings.deliveryFeeTl,
@@ -32,7 +37,8 @@ export async function POST(request) {
     if (!DIRECTIONS.includes(direction)) {
       return NextResponse.json({ success: false, error: 'Invalid direction' }, { status: 400 });
     }
-    if (direction === 'want_tsh' && !CURRENCIES.includes(currency)) {
+    const currencyRequired = direction === 'want_tsh' || (direction === 'send_tsh' && mode === 'target');
+    if (currencyRequired && !CURRENCIES.includes(currency)) {
       return NextResponse.json({ success: false, error: 'Invalid currency' }, { status: 400 });
     }
 

@@ -12,6 +12,7 @@ import {
   calculateTshToAll,
   calculateForeignToTsh,
   calculateRequiredForeignForTsh,
+  calculateRequiredTshForForeign,
   calculateQuote,
   convertDeliveryFeeToForeign,
   convertDeliveryFeeToTsh,
@@ -261,6 +262,48 @@ test('calculateQuote mode "given" (default) is unchanged and still returns final
   assert.equal(quote.mode, 'given');
   assert.ok(quote.finalTsh > 0);
   assert.equal(quote.requiredAmount, undefined);
+});
+
+console.log('\n12. Reverse lookup, other direction: client knows the exact foreign amount they want, solve for how much TSh to hand over');
+test('client wants exactly $100: required TSh round-trips back to ~$100 (within rounding)', () => {
+  const { requiredTsh, sellRate } = calculateRequiredTshForForeign({
+    currency: 'USD', targetForeignAmount: 100, rates: RATES, marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+  });
+  assert.ok(Math.abs(requiredTsh / sellRate - 100) < 1, 'requiredTsh / sellRate should land within a rounding cent of the target');
+});
+test('reverse and forward calculations agree with each other', () => {
+  const { requiredTsh } = calculateRequiredTshForForeign({
+    currency: 'EUR', targetForeignAmount: 50, rates: RATES, marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+  });
+  const { amount } = calculateTshToOne(requiredTsh, 'EUR', RATES, MARGIN);
+  assert.ok(Math.abs(amount - 50) < 0.5, 'feeding the reverse-calculated TSh back through the forward formula should reproduce the target');
+});
+test('with delivery: reverse calculation requires MORE TSh, so the client still nets exactly the target after the fee', () => {
+  const withoutDelivery = calculateRequiredTshForForeign({
+    currency: 'USD', targetForeignAmount: 100, rates: RATES, marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: false,
+  });
+  const withDelivery = calculateRequiredTshForForeign({
+    currency: 'USD', targetForeignAmount: 100, rates: RATES, marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL, needsDelivery: true,
+  });
+  assert.ok(withDelivery.requiredTsh > withoutDelivery.requiredTsh, 'must hand over more TSh to still net the same target after the delivery fee is deducted');
+
+  const quote = calculateQuote({
+    direction: 'send_tsh', amount: withDelivery.requiredTsh, settings: { marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL },
+    rates: RATES, needsDelivery: true,
+  });
+  assert.ok(Math.abs(quote.results.USD - 100) < 0.5, 'client should still net ~$100 after handing over the reverse-calculated TSh and deducting delivery');
+});
+test('calculateQuote send_tsh mode "target" returns requiredTsh instead of the all-currency results object', () => {
+  const settings = { marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  const quote = calculateQuote({ direction: 'send_tsh', currency: 'USD', amount: 100, settings, rates: RATES, mode: 'target' });
+  assert.equal(quote.mode, 'target');
+  assert.equal(quote.targetForeignAmount, 100);
+  assert.ok(quote.requiredTsh > 0);
+  assert.equal(quote.results, undefined);
+});
+test('calculateQuote send_tsh mode "target" rejects an unsupported currency', () => {
+  const settings = { marginPercent: MARGIN, deliveryFeeTl: DELIVERY_FEE_TL };
+  assert.throws(() => calculateQuote({ direction: 'send_tsh', currency: 'JPY', amount: 100, settings, rates: RATES, mode: 'target' }), QuoteError);
 });
 
 // round2 isn't exported, so mirror it locally for the assertions above.

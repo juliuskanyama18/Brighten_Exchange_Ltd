@@ -55,15 +55,17 @@ function TzsBadge() {
 // a "You Get" box, and a swap button — no tabs, no "send"/"want" labels
 // that can be misread as a remittance (sending money to someone else)
 // instead of what it actually is (handing currency to the exchanger).
-// `tzsSide` says which box currently holds TZS; the swap button flips it.
+//
+// `tzsSide` says which box currently holds TZS (the swap button flips it).
+// `inputSide` says which box you're currently typing an amount into — the
+// OTHER box always shows the computed result. Someone who knows what they
+// want to receive but not what that costs can tap the "You Get" box itself
+// and type there instead; the "You Give" box then becomes the computed one.
 export default function Converter({ paymentDetails }) {
-  const [tzsSide, setTzsSide] = useState('give'); // 'give' = you hand over TZS, 'get' = you hand over foreign currency
+  const [tzsSide, setTzsSide] = useState('give');
+  const [inputSide, setInputSide] = useState('give');
   const [foreignCurrency, setForeignCurrency] = useState('USD');
   const [amount, setAmount] = useState('');
-  // Only meaningful when tzsSide === 'get': false = you type the foreign
-  // amount you're handing over; true = you type the exact TZS you need,
-  // and we solve for how much foreign currency to collect instead.
-  const [targetMode, setTargetMode] = useState(false);
 
   const [ratesInfo, setRatesInfo] = useState(null);
   const [quote, setQuote] = useState(null);
@@ -71,8 +73,7 @@ export default function Converter({ paymentDetails }) {
   const [deliveryFeeTl, setDeliveryFeeTl] = useState(null);
   const [showInfo, setShowInfo] = useState(false);
 
-  const [sendQuote, setSendQuote] = useState(null); // tzsSide 'give': full /api/quote response (all 4 currencies)
-  const [wantResult, setWantResult] = useState(null); // tzsSide 'get': full /api/quote response
+  const [result, setResult] = useState(null); // full /api/quote response for the current combination
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -91,49 +92,39 @@ export default function Converter({ paymentDetails }) {
     }).catch(() => {});
   }, []);
 
-  const fetchSendQuote = useCallback(async (amt, delivery) => {
+  // Which /api/quote shape to ask for depends on BOTH which side holds TZS
+  // and which side is being typed into:
+  //   tzsSide='give', inputSide='give' -> send_tsh, mode 'given'  (typed TZS, solve foreign)
+  //   tzsSide='give', inputSide='get'  -> send_tsh, mode 'target' (typed foreign, solve TZS)
+  //   tzsSide='get',  inputSide='give' -> want_tsh, mode 'given'  (typed foreign, solve TZS)
+  //   tzsSide='get',  inputSide='get'  -> want_tsh, mode 'target' (typed TZS, solve foreign)
+  const fetchQuote = useCallback(async (side, input, currency, amt, delivery) => {
     const clean = amt.replace(/,/g, '');
     if (!clean || parseFloat(clean) <= 0) {
-      setSendQuote(null);
+      setResult(null);
       return;
     }
     setLoading(true);
     setError('');
+    const direction = side === 'give' ? 'send_tsh' : 'want_tsh';
+    // 'given' always means "typed into the You-Give box" (forward calc from
+    // what's handed over); 'target' always means "typed into the You-Get
+    // box" (reverse calc, solving for what to hand over) — regardless of
+    // which currency happens to be on which side.
+    const mode = input === 'give' ? 'given' : 'target';
+    const body = { direction, amount: clean, needsDelivery: delivery, mode };
+    if (direction === 'want_tsh' || mode === 'target') body.currency = currency;
     try {
-      const { data } = await axios.post('/api/quote', { direction: 'send_tsh', amount: clean, needsDelivery: delivery });
+      const { data } = await axios.post('/api/quote', body);
       if (data.success) {
-        setSendQuote(data);
+        setResult(data);
       } else {
         setError(data.error || 'Could not calculate quote');
-        setSendQuote(null);
+        setResult(null);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Could not get rate. Check connection.');
-      setSendQuote(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchWantQuote = useCallback(async (currency, amt, delivery, mode) => {
-    const clean = amt.replace(/,/g, '');
-    if (!clean || parseFloat(clean) <= 0) {
-      setWantResult(null);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const { data } = await axios.post('/api/quote', { direction: 'want_tsh', currency, amount: clean, needsDelivery: delivery, mode });
-      if (data.success) {
-        setWantResult(data);
-      } else {
-        setError(data.error || 'Could not calculate quote');
-        setWantResult(null);
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not get rate. Check connection.');
-      setWantResult(null);
+      setResult(null);
     } finally {
       setLoading(false);
     }
@@ -141,83 +132,89 @@ export default function Converter({ paymentDetails }) {
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
-    if (tzsSide === 'give') {
-      debounceRef.current = setTimeout(() => fetchSendQuote(amount, needsDelivery), 500);
-    } else {
-      debounceRef.current = setTimeout(() => fetchWantQuote(foreignCurrency, amount, needsDelivery, targetMode ? 'target' : 'given'), 500);
-    }
+    debounceRef.current = setTimeout(
+      () => fetchQuote(tzsSide, inputSide, foreignCurrency, amount, needsDelivery),
+      500
+    );
     return () => clearTimeout(debounceRef.current);
-  }, [tzsSide, amount, foreignCurrency, needsDelivery, targetMode, fetchSendQuote, fetchWantQuote]);
+  }, [tzsSide, inputSide, amount, foreignCurrency, needsDelivery, fetchQuote]);
 
   const handleSwap = () => {
     setTzsSide((s) => (s === 'give' ? 'get' : 'give'));
-    setTargetMode(false);
+    setInputSide('give');
     setAmount('');
-    setSendQuote(null);
-    setWantResult(null);
+    setResult(null);
     setError('');
   };
 
-  const handleToggleTargetMode = () => {
-    setTargetMode((v) => !v);
+  const handleActivateSide = (side) => {
+    if (side === inputSide) return;
+    setInputSide(side);
     setAmount('');
-    setWantResult(null);
+    setResult(null);
     setError('');
   };
+
+  // Which number (if any) the read-only box should show, computed from
+  // whichever /api/quote shape `result` currently holds.
+  let computedValue = null;
+  if (result) {
+    if (tzsSide === 'give' && inputSide === 'give') computedValue = result.results?.[foreignCurrency];
+    else if (tzsSide === 'give' && inputSide === 'get') computedValue = result.requiredTsh;
+    else if (tzsSide === 'get' && inputSide === 'give') computedValue = result.finalTsh;
+    else computedValue = result.requiredAmount;
+  }
+  const canGetQuote = computedValue !== null && computedValue !== undefined;
+
+  const giveCurrency = tzsSide === 'give' ? 'TZS' : foreignCurrency;
+  const getCurrency = tzsSide === 'give' ? foreignCurrency : 'TZS';
+  const computedBoxSide = inputSide === 'give' ? 'get' : 'give';
 
   const handleGetQuote = () => {
-    if (tzsSide === 'give') {
-      const netAmount = sendQuote?.results?.[foreignCurrency];
+    if (!result) return;
+    if (tzsSide === 'give' && inputSide === 'give') {
+      const netAmount = result.results?.[foreignCurrency];
       if (netAmount === null || netAmount === undefined) return;
-      const grossAmount = (sendQuote.grossResults ?? sendQuote.results)[foreignCurrency];
+      const grossAmount = (result.grossResults ?? result.results)[foreignCurrency];
       const tshAmountNum = parseFloat(amount.replace(/,/g, ''));
       setQuote({
-        direction: 'send_tsh',
-        fromCurrency: 'TZS',
-        toCurrency: foreignCurrency,
-        sendAmount: tshAmountNum,
-        receiveAmount: netAmount,
+        direction: 'send_tsh', fromCurrency: 'TZS', toCurrency: foreignCurrency,
+        sendAmount: tshAmountNum, receiveAmount: netAmount,
         rateUsed: tshAmountNum / grossAmount, // pure sell rate, unaffected by delivery fee
-        needsDelivery: sendQuote.needsDelivery,
-        grossAmount,
-        deliveryFeeAmount: sendQuote.deliveryFees?.[foreignCurrency] ?? 0,
+        needsDelivery: result.needsDelivery, grossAmount,
+        deliveryFeeAmount: result.deliveryFees?.[foreignCurrency] ?? 0,
       });
-      return;
-    }
-
-    if (!wantResult) return;
-    if (wantResult.mode === 'target') {
+    } else if (tzsSide === 'give' && inputSide === 'get') {
       setQuote({
-        direction: 'want_tsh',
-        fromCurrency: foreignCurrency,
-        toCurrency: 'TZS',
-        sendAmount: wantResult.requiredAmount,
-        receiveAmount: wantResult.targetTsh,
-        rateUsed: wantResult.buyRate,
-        needsDelivery: wantResult.needsDelivery,
-        grossAmount: wantResult.grossTshNeeded ?? wantResult.targetTsh,
-        deliveryFeeAmount: wantResult.deliveryFeeTsh ?? 0,
+        direction: 'send_tsh', fromCurrency: 'TZS', toCurrency: foreignCurrency,
+        sendAmount: result.requiredTsh, receiveAmount: result.targetForeignAmount,
+        rateUsed: result.sellRate, needsDelivery: result.needsDelivery,
+        grossAmount: result.grossForeignNeeded ?? result.targetForeignAmount,
+        deliveryFeeAmount: result.deliveryFeeForeign ?? 0,
       });
-      return;
+    } else if (tzsSide === 'get' && inputSide === 'give') {
+      setQuote({
+        direction: 'want_tsh', fromCurrency: foreignCurrency, toCurrency: 'TZS',
+        sendAmount: parseFloat(amount.replace(/,/g, '')), receiveAmount: result.finalTsh,
+        rateUsed: result.buyRate, needsDelivery: result.needsDelivery,
+        grossAmount: result.grossTsh ?? result.finalTsh,
+        deliveryFeeAmount: result.deliveryFeeTsh ?? 0,
+      });
+    } else {
+      setQuote({
+        direction: 'want_tsh', fromCurrency: foreignCurrency, toCurrency: 'TZS',
+        sendAmount: result.requiredAmount, receiveAmount: result.targetTsh,
+        rateUsed: result.buyRate, needsDelivery: result.needsDelivery,
+        grossAmount: result.grossTshNeeded ?? result.targetTsh,
+        deliveryFeeAmount: result.deliveryFeeTsh ?? 0,
+      });
     }
-    setQuote({
-      direction: 'want_tsh',
-      fromCurrency: foreignCurrency,
-      toCurrency: 'TZS',
-      sendAmount: parseFloat(amount.replace(/,/g, '')),
-      receiveAmount: wantResult.finalTsh,
-      rateUsed: wantResult.buyRate,
-      needsDelivery: wantResult.needsDelivery,
-      grossAmount: wantResult.grossTsh ?? wantResult.finalTsh,
-      deliveryFeeAmount: wantResult.deliveryFeeTsh ?? 0,
-    });
   };
 
   const handleReset = () => {
     setQuote(null);
     setAmount('');
-    setSendQuote(null);
-    setWantResult(null);
+    setResult(null);
   };
 
   if (quote) {
@@ -231,27 +228,6 @@ export default function Converter({ paymentDetails }) {
     );
   }
 
-  // Which box is the editable input right now, and what computed value (if
-  // any) the other box should display.
-  const inputSide = tzsSide === 'get' && targetMode ? 'get' : 'give';
-  let computedForeign = null; // shown in the foreign box when it's read-only
-  let computedTsh = null;     // shown in the TZS box when it's read-only
-  let canGetQuote = false;
-
-  if (tzsSide === 'give') {
-    computedForeign = sendQuote?.results?.[foreignCurrency] ?? null;
-    canGetQuote = computedForeign !== null && computedForeign !== undefined;
-  } else if (!targetMode) {
-    computedTsh = wantResult?.mode === 'given' ? wantResult.finalTsh : null;
-    canGetQuote = computedTsh !== null && computedTsh !== undefined;
-  } else {
-    computedForeign = wantResult?.mode === 'target' ? wantResult.requiredAmount : null;
-    canGetQuote = computedForeign !== null && computedForeign !== undefined;
-  }
-
-  const giveCurrency = tzsSide === 'give' ? 'TZS' : foreignCurrency;
-  const getCurrency = tzsSide === 'give' ? foreignCurrency : 'TZS';
-
   const Spinner = (
     <div className="flex items-center gap-2 text-slate-400 text-sm">
       <svg className="animate-spin w-4 h-4 text-gold-500" fill="none" viewBox="0 0 24 24">
@@ -262,17 +238,21 @@ export default function Converter({ paymentDetails }) {
     </div>
   );
 
-  return (
-    <div className="space-y-3.5">
-      {/* You Give */}
+  function AmountBox({ side, currency, label, highlight }) {
+    const isInput = side === inputSide;
+    return (
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-          You Give
+          {label}
         </label>
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+        <div className={`border rounded-2xl p-3.5 transition-shadow ${
+          highlight
+            ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-gold-500'
+            : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700'
+        }`}>
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
-              {inputSide === 'give' ? (
+              {isInput ? (
                 <input
                   type="text"
                   inputMode="decimal"
@@ -282,12 +262,16 @@ export default function Converter({ paymentDetails }) {
                   className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
                 />
               ) : loading ? Spinner : (
-                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words">
-                  {computedForeign !== null ? formatAmount(computedForeign, foreignCurrency) : '0'}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => handleActivateSide(side)}
+                  className="w-full text-left text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words"
+                >
+                  {computedValue !== null && computedValue !== undefined ? formatAmount(computedValue, currency) : '0'}
+                </button>
               )}
             </div>
-            {giveCurrency === 'TZS' ? <TzsBadge /> : (
+            {currency === 'TZS' ? <TzsBadge /> : (
               <div className="w-32 sm:w-36 shrink-0">
                 <CurrencySelector value={foreignCurrency} onChange={setForeignCurrency} currencies={FOREIGN_CURRENCIES} />
               </div>
@@ -295,8 +279,13 @@ export default function Converter({ paymentDetails }) {
           </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Swap */}
+  return (
+    <div className="space-y-3.5">
+      <AmountBox side="give" currency={giveCurrency} label="You Give" highlight />
+
       <div className="flex justify-center -my-1.5 relative z-10">
         <button
           type="button"
@@ -310,52 +299,19 @@ export default function Converter({ paymentDetails }) {
         </button>
       </div>
 
-      {/* You Get */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-          You Get
-        </label>
-        <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              {inputSide === 'get' ? (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(formatNumberInput(e.target.value))}
-                  placeholder="0"
-                  className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
-                />
-              ) : loading ? Spinner : (
-                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words">
-                  {getCurrency === 'TZS'
-                    ? (computedTsh !== null ? formatAmount(computedTsh, 'TZS') : '0')
-                    : (computedForeign !== null ? formatAmount(computedForeign, foreignCurrency) : '0')}
-                </p>
-              )}
-            </div>
-            {getCurrency === 'TZS' ? <TzsBadge /> : (
-              <div className="w-32 sm:w-36 shrink-0">
-                <CurrencySelector value={foreignCurrency} onChange={setForeignCurrency} currencies={FOREIGN_CURRENCIES} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <AmountBox side="get" currency={getCurrency} label="You Get" />
 
-      {/* Exact-amount toggle — only relevant when you're handing over foreign
-          currency and want to specify the TZS side instead (e.g. the
-          exchanger already knows the client needs exactly 270,000 TZS). */}
-      {tzsSide === 'get' && (
-        <button
-          type="button"
-          onClick={handleToggleTargetMode}
-          className="block w-full text-center text-xs text-slate-400 dark:text-slate-500 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
-        >
-          {targetMode ? '← Type the amount you\'re giving instead' : 'Need to receive an exact TZS amount instead? →'}
-        </button>
-      )}
+      {/* Discoverability hint for tapping the other box — the box itself is
+          already clickable, this just makes it obvious. */}
+      <button
+        type="button"
+        onClick={() => handleActivateSide(computedBoxSide)}
+        className="block w-full text-center text-xs text-slate-400 dark:text-slate-500 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
+      >
+        {inputSide === 'give'
+          ? `Don't know what to give? Type what you want to get instead →`
+          : `← Type what you're giving instead`}
+      </button>
 
       <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
 
