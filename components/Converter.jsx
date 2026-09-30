@@ -51,6 +51,64 @@ function TzsBadge() {
   );
 }
 
+const Spinner = (
+  <div className="flex items-center gap-2 text-slate-400 text-sm">
+    <svg className="animate-spin w-4 h-4 text-gold-500" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+    </svg>
+    Calculating…
+  </div>
+);
+
+// Defined at module scope (not inside Converter) on purpose: a component
+// declared inside another component's body gets a NEW identity every
+// render, so React unmounts and remounts its <input> on every keystroke —
+// which drops focus and dismisses the mobile keyboard after a single
+// digit. Keeping it stable here is what lets you type a full amount.
+function AmountBox({ side, currency, label, highlight, isInput, amount, onAmountChange, loading, computedValue, onActivate, foreignCurrency, onForeignCurrencyChange }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+        {label}
+      </label>
+      <div className={`border rounded-2xl p-3.5 transition-shadow ${
+        highlight
+          ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-gold-500'
+          : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            {isInput ? (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => onAmountChange(formatNumberInput(e.target.value))}
+                placeholder="0"
+                className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
+              />
+            ) : loading ? Spinner : (
+              <button
+                type="button"
+                onClick={() => onActivate(side)}
+                className="w-full text-left text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words"
+              >
+                {computedValue !== null && computedValue !== undefined ? formatAmount(computedValue, currency) : '0'}
+              </button>
+            )}
+          </div>
+          {currency === 'TZS' ? <TzsBadge /> : (
+            <div className="w-32 sm:w-36 shrink-0">
+              <CurrencySelector value={foreignCurrency} onChange={onForeignCurrencyChange} currencies={FOREIGN_CURRENCIES} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Everyone already knows how to use a currency converter: a "You Give" box,
 // a "You Get" box, and a swap button — no tabs, no "send"/"want" labels
 // that can be misread as a remittance (sending money to someone else)
@@ -228,63 +286,14 @@ export default function Converter({ paymentDetails }) {
     );
   }
 
-  const Spinner = (
-    <div className="flex items-center gap-2 text-slate-400 text-sm">
-      <svg className="animate-spin w-4 h-4 text-gold-500" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-      </svg>
-      Calculating…
-    </div>
-  );
-
-  function AmountBox({ side, currency, label, highlight }) {
-    const isInput = side === inputSide;
-    return (
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-          {label}
-        </label>
-        <div className={`border rounded-2xl p-3.5 transition-shadow ${
-          highlight
-            ? 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-gold-500'
-            : 'bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700'
-        }`}>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              {isInput ? (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(formatNumberInput(e.target.value))}
-                  placeholder="0"
-                  className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
-                />
-              ) : loading ? Spinner : (
-                <button
-                  type="button"
-                  onClick={() => handleActivateSide(side)}
-                  className="w-full text-left text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words"
-                >
-                  {computedValue !== null && computedValue !== undefined ? formatAmount(computedValue, currency) : '0'}
-                </button>
-              )}
-            </div>
-            {currency === 'TZS' ? <TzsBadge /> : (
-              <div className="w-32 sm:w-36 shrink-0">
-                <CurrencySelector value={foreignCurrency} onChange={setForeignCurrency} currencies={FOREIGN_CURRENCIES} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-3.5">
-      <AmountBox side="give" currency={giveCurrency} label="You Give" highlight />
+      <AmountBox
+        side="give" currency={giveCurrency} label="You Give" highlight
+        isInput={inputSide === 'give'} amount={amount} onAmountChange={setAmount}
+        loading={loading} computedValue={computedValue} onActivate={handleActivateSide}
+        foreignCurrency={foreignCurrency} onForeignCurrencyChange={setForeignCurrency}
+      />
 
       <div className="flex justify-center -my-1.5 relative z-10">
         <button
@@ -299,7 +308,12 @@ export default function Converter({ paymentDetails }) {
         </button>
       </div>
 
-      <AmountBox side="get" currency={getCurrency} label="You Get" />
+      <AmountBox
+        side="get" currency={getCurrency} label="You Get"
+        isInput={inputSide === 'get'} amount={amount} onAmountChange={setAmount}
+        loading={loading} computedValue={computedValue} onActivate={handleActivateSide}
+        foreignCurrency={foreignCurrency} onForeignCurrencyChange={setForeignCurrency}
+      />
 
       {/* Discoverability hint for tapping the other box — the box itself is
           already clickable, this just makes it obvious. */}
