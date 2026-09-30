@@ -6,9 +6,10 @@ import { formatDate } from '@/utils/formatting';
 
 export default function AnchorSettings({ settings, onUpdate }) {
   const [form, setForm] = useState({
-    marginPercent:  settings?.marginPercent  ?? 5,
-    deliveryFeeTl:  settings?.deliveryFeeTl  ?? 300,
-    whatsappNumber: settings?.whatsappNumber ?? '',
+    sellMarginPercent: settings?.sellMarginPercent ?? 5,
+    buyMarginPercent:  settings?.buyMarginPercent  ?? 5,
+    deliveryFeeTl:      settings?.deliveryFeeTl      ?? 300,
+    whatsappNumber:     settings?.whatsappNumber     ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
@@ -31,9 +32,11 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   useEffect(() => { loadRates(); }, []);
 
-  const marginPercentNum = Number(form.marginPercent);
-  const deliveryFeeTlNum = Number(form.deliveryFeeTl);
-  const marginValid = Number.isFinite(marginPercentNum) && marginPercentNum >= 0 && marginPercentNum < 100;
+  const sellMarginPercentNum = Number(form.sellMarginPercent);
+  const buyMarginPercentNum  = Number(form.buyMarginPercent);
+  const deliveryFeeTlNum     = Number(form.deliveryFeeTl);
+  const sellMarginValid = Number.isFinite(sellMarginPercentNum) && sellMarginPercentNum >= 0 && sellMarginPercentNum < 100;
+  const buyMarginValid  = Number.isFinite(buyMarginPercentNum) && buyMarginPercentNum >= 0 && buyMarginPercentNum < 100;
   const deliveryFeeTlValid = Number.isFinite(deliveryFeeTlNum) && deliveryFeeTlNum >= 0;
 
   const referenceRate = (currency) => {
@@ -41,16 +44,16 @@ export default function AnchorSettings({ settings, onUpdate }) {
     return rates?.rates?.[currency]?.tzsPerUnit ?? null;
   };
 
-  // Live preview of what each currency's buy/sell price will be — a flat
-  // commission on that currency's OWN live rate, independently. No anchor
-  // currency and no cross-rate routing, unlike the old TL-anchor model.
+  // Live preview of what each currency's buy/sell price will be — independent
+  // flat commissions on that currency's OWN live rate. No anchor currency
+  // and no cross-rate routing, unlike the old TL-anchor model.
   const previewRows = ['TL', 'USD', 'EUR', 'GBP'].map((c) => {
     const ref = referenceRate(c);
-    if (ref === null || !marginValid) return { currency: c, sell: null, buy: null };
+    if (ref === null) return { currency: c, sell: null, buy: null };
     return {
       currency: c,
-      sell: ref * (1 + marginPercentNum / 100),
-      buy:  ref * (1 - marginPercentNum / 100),
+      sell: sellMarginValid ? ref * (1 + sellMarginPercentNum / 100) : null,
+      buy:  buyMarginValid ? ref * (1 - buyMarginPercentNum / 100) : null,
     };
   });
 
@@ -58,8 +61,12 @@ export default function AnchorSettings({ settings, onUpdate }) {
     // Catch a blank/invalid field here — otherwise parseFloat('') = NaN,
     // JSON.stringify silently turns NaN into null, and the field would save
     // as null (this previously broke every "I want TSh" quote in production).
-    if (!marginValid) {
-      setSaveError('Commission (%) must be a number between 0 and 99.');
+    if (!sellMarginValid) {
+      setSaveError('Sell commission (%) must be a number between 0 and 99.');
+      return;
+    }
+    if (!buyMarginValid) {
+      setSaveError('Buy commission (%) must be a number between 0 and 99.');
       return;
     }
     if (!deliveryFeeTlValid) {
@@ -71,9 +78,10 @@ export default function AnchorSettings({ settings, onUpdate }) {
     setSaving(true);
     try {
       const { data } = await axios.put('/api/admin/settings', {
-        marginPercent:  marginPercentNum,
-        deliveryFeeTl:  deliveryFeeTlNum,
-        whatsappNumber: form.whatsappNumber.trim(),
+        sellMarginPercent: sellMarginPercentNum,
+        buyMarginPercent:  buyMarginPercentNum,
+        deliveryFeeTl:     deliveryFeeTlNum,
+        whatsappNumber:    form.whatsappNumber.trim(),
       });
       if (data.success) {
         onUpdate(data.settings);
@@ -110,24 +118,39 @@ export default function AnchorSettings({ settings, onUpdate }) {
     <div className="space-y-6">
       {/* Commission */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Commission — one flat % on every currency</h3>
+        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Commission — independent sell/buy %, every currency</h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          A single commission percentage is applied directly to each currency's own live rate, independently —
-          no anchor currency, no cross-rate routing. You sell above the live rate and buy below it by the same %,
-          for TL, USD, EUR and GBP alike.
+          Two commission percentages are applied directly to each currency's own live rate, independently — no
+          anchor currency, no cross-rate routing. You sell above the live rate by the sell %, and buy below it by
+          the buy %, for TL, USD, EUR and GBP alike. They don't have to match.
         </p>
-        <div className="max-w-xs">
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-            Commission (%) — All Currencies, Both Directions
-          </label>
-          <input
-            type="number"
-            step="0.5"
-            value={form.marginPercent}
-            onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
-          />
-          <p className="text-xs text-slate-400 mt-1">Default: 5</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+              Sell Commission (%)
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              value={form.sellMarginPercent}
+              onChange={(e) => setForm({ ...form, sellMarginPercent: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+            <p className="text-xs text-slate-400 mt-1">Client gives TSh, gets currency. Default: 5</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+              Buy Commission (%)
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              value={form.buyMarginPercent}
+              onChange={(e) => setForm({ ...form, buyMarginPercent: e.target.value })}
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
+            />
+            <p className="text-xs text-slate-400 mt-1">Client gives currency, gets TSh. Default: 5</p>
+          </div>
         </div>
 
         {/* Live preview of resulting buy/sell prices */}

@@ -4,11 +4,13 @@ const SettingsSchema = new mongoose.Schema({
   // --- Commission (flat % on each currency's own live rate) ---
   // There is NO anchor currency anymore (removed 2026-09-30, per business
   // decision for a low-volume operation — see git history for the prior
-  // TL-anchored flat-TSh model). A single commission percentage is applied
-  // directly to every currency's own live reference rate:
-  //   sellRate(X) = liveRate(X) * (1 + marginPercent/100)
-  //   buyRate(X)  = liveRate(X) * (1 - marginPercent/100)
-  marginPercent: { type: Number, default: 5, min: 0, max: 99 },
+  // TL-anchored flat-TSh model). Independent sell/buy commission percentages
+  // (split from a single marginPercent 2026-10-01, per admin request) are
+  // applied directly to every currency's own live reference rate:
+  //   sellRate(X) = liveRate(X) * (1 + sellMarginPercent/100)
+  //   buyRate(X)  = liveRate(X) * (1 - buyMarginPercent/100)
+  sellMarginPercent: { type: Number, default: 5, min: 0, max: 99 },
+  buyMarginPercent:  { type: Number, default: 5, min: 0, max: 99 },
 
   // --- Delivery Fee ---
   // Optional, opt-in per transaction (client checks "needs delivery"). A
