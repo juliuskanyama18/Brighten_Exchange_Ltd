@@ -6,8 +6,7 @@ import { formatDate } from '@/utils/formatting';
 
 export default function AnchorSettings({ settings, onUpdate }) {
   const [form, setForm] = useState({
-    buyMarginTlTsh: settings?.buyMarginTlTsh ?? 3,
-    marginTlTsh:    settings?.marginTlTsh    ?? 5,
+    marginPercent:  settings?.marginPercent  ?? 5,
     deliveryFeeTl:  settings?.deliveryFeeTl  ?? 300,
     whatsappNumber: settings?.whatsappNumber ?? '',
   });
@@ -32,53 +31,35 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   useEffect(() => { loadRates(); }, []);
 
-  const buyMarginTlTshNum   = Number(form.buyMarginTlTsh);
-  const marginTlTshNum      = Number(form.marginTlTsh);
-  const deliveryFeeTlNum    = Number(form.deliveryFeeTl);
-  const buyMarginValid = Number.isFinite(buyMarginTlTshNum) && buyMarginTlTshNum >= 0;
-  const marginTlTshValid = Number.isFinite(marginTlTshNum) && marginTlTshNum >= 0;
+  const marginPercentNum = Number(form.marginPercent);
+  const deliveryFeeTlNum = Number(form.deliveryFeeTl);
+  const marginValid = Number.isFinite(marginPercentNum) && marginPercentNum >= 0 && marginPercentNum < 100;
   const deliveryFeeTlValid = Number.isFinite(deliveryFeeTlNum) && deliveryFeeTlNum >= 0;
 
-  const tlReference = rates?.rates?.TRY?.tzsPerUnit ?? null;
   const referenceRate = (currency) => {
-    if (currency === 'TL') return tlReference;
+    if (currency === 'TL') return rates?.rates?.TRY?.tzsPerUnit ?? null;
     return rates?.rates?.[currency]?.tzsPerUnit ?? null;
   };
 
-  // Live preview of what each currency's buy/sell price will be, computed
-  // the same way lib/calc.js does — TL's marked-up/down rate becomes the
-  // anchor, and USD/EUR/GBP prices are derived from it via the live
-  // TL-per-currency cross rate, NOT from their own reference rate directly.
-  const tlSellAnchor = tlReference !== null && marginTlTshValid ? tlReference + marginTlTshNum : null;
-  const tlBuyAnchor  = tlReference !== null && buyMarginValid ? tlReference - buyMarginTlTshNum : null;
-
+  // Live preview of what each currency's buy/sell price will be — a flat
+  // commission on that currency's OWN live rate, independently. No anchor
+  // currency and no cross-rate routing, unlike the old TL-anchor model.
   const previewRows = ['TL', 'USD', 'EUR', 'GBP'].map((c) => {
-    if (c === 'TL') return { currency: c, sell: tlSellAnchor, buy: tlBuyAnchor };
-    const tlPerUnit = rates?.rates?.[c]?.tlPerUnit ?? null;
-    if (tlPerUnit === null) return { currency: c, sell: null, buy: null };
+    const ref = referenceRate(c);
+    if (ref === null || !marginValid) return { currency: c, sell: null, buy: null };
     return {
       currency: c,
-      sell: tlSellAnchor !== null ? tlSellAnchor * tlPerUnit : null,
-      buy:  tlBuyAnchor !== null ? tlBuyAnchor * tlPerUnit : null,
+      sell: ref * (1 + marginPercentNum / 100),
+      buy:  ref * (1 - marginPercentNum / 100),
     };
   });
-
-  // Effective % markup/markdown that TL's anchor pricing works out to for
-  // the other currencies, purely for admin transparency — this MOVES as
-  // TL's live rate moves, unlike a fixed percentage would.
-  const effectiveSellPercent = tlReference && tlSellAnchor ? ((tlSellAnchor / tlReference - 1) * 100) : null;
-  const effectiveBuyPercent = tlReference && tlBuyAnchor ? ((1 - tlBuyAnchor / tlReference) * 100) : null;
 
   const handleSave = async () => {
     // Catch a blank/invalid field here — otherwise parseFloat('') = NaN,
     // JSON.stringify silently turns NaN into null, and the field would save
     // as null (this previously broke every "I want TSh" quote in production).
-    if (!buyMarginValid) {
-      setSaveError('Buy margin (TSh) must be a number of at least 0.');
-      return;
-    }
-    if (!marginTlTshValid) {
-      setSaveError('TL sell margin must be a number of at least 0.');
+    if (!marginValid) {
+      setSaveError('Commission (%) must be a number between 0 and 99.');
       return;
     }
     if (!deliveryFeeTlValid) {
@@ -90,8 +71,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
     setSaving(true);
     try {
       const { data } = await axios.put('/api/admin/settings', {
-        buyMarginTlTsh: buyMarginTlTshNum,
-        marginTlTsh:    marginTlTshNum,
+        marginPercent:  marginPercentNum,
         deliveryFeeTl:  deliveryFeeTlNum,
         whatsappNumber: form.whatsappNumber.trim(),
       });
@@ -128,49 +108,26 @@ export default function AnchorSettings({ settings, onUpdate }) {
 
   return (
     <div className="space-y-6">
-      {/* Margin */}
+      {/* Commission */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Margin — TL is the anchor for everything</h3>
+        <h3 className="font-bold text-slate-900 dark:text-white mb-1">Commission — one flat % on every currency</h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          There is no manual anchor number anymore. TL's live reference rate (an implied TRY→TZS cross-rate) gets
-          marked up/down by TL's own margin first, and <strong>that marked-up/down TL rate is then used to price
-          USD, EUR and GBP too</strong> (via the live TL-per-currency rate) — instead of each currency marking up
-          its own reference rate independently. This means the effective % margin on USD/EUR/GBP moves over time
-          as TL's live rate moves — see the preview table below for today's actual numbers.
+          A single commission percentage is applied directly to each currency's own live rate, independently —
+          no anchor currency, no cross-rate routing. You sell above the live rate and buy below it by the same %,
+          for TL, USD, EUR and GBP alike.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              TL Sell Margin (TSh)
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              value={form.marginTlTsh}
-              onChange={(e) => setForm({ ...form, marginTlTsh: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
-            />
-            <p className="text-xs text-slate-400 mt-1">
-              Flat TSh added to TL's live rate to build the sell anchor. Default: 5
-              {effectiveSellPercent !== null && ` (≈ +${effectiveSellPercent.toFixed(1)}% today)`}
-            </p>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              Buy Margin (TSh) — All Currencies
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              value={form.buyMarginTlTsh}
-              onChange={(e) => setForm({ ...form, buyMarginTlTsh: e.target.value })}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
-            />
-            <p className="text-xs text-slate-400 mt-1">
-              Flat TSh subtracted from TL's live rate to build the buy anchor. Default: 3
-              {effectiveBuyPercent !== null && ` (≈ -${effectiveBuyPercent.toFixed(1)}% today)`}
-            </p>
-          </div>
+        <div className="max-w-xs">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+            Commission (%) — All Currencies, Both Directions
+          </label>
+          <input
+            type="number"
+            step="0.5"
+            value={form.marginPercent}
+            onChange={(e) => setForm({ ...form, marginPercent: e.target.value })}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-2 focus:ring-gold-500"
+          />
+          <p className="text-xs text-slate-400 mt-1">Default: 5</p>
         </div>
 
         {/* Live preview of resulting buy/sell prices */}
@@ -211,7 +168,7 @@ export default function AnchorSettings({ settings, onUpdate }) {
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
           Optional, opt-in per transaction — the client (or exchanger, on their behalf) checks "needs delivery" in
           the calculator. This flat TL amount is converted into whatever currency the client is receiving (at the
-          live reference rate, no margin) and deducted from it.
+          live reference rate, no commission) and deducted from it.
         </p>
         <div className="max-w-xs">
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
@@ -269,9 +226,8 @@ export default function AnchorSettings({ settings, onUpdate }) {
           </button>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-          Fetched from ExchangeRate-API and cached in MongoDB. These raw reference rates are shown for your own
-          sanity-checking only — USD/EUR/GBP prices are no longer computed directly from these, they're derived
-          from the TL anchor above (see the preview table).
+          Fetched from ExchangeRate-API and cached in MongoDB. Each currency's buy/sell price above is computed
+          directly from its own rate here, marked up/down by the commission.
         </p>
 
         {refreshError && (
@@ -293,11 +249,6 @@ export default function AnchorSettings({ settings, onUpdate }) {
                   <p className="text-sm text-slate-900 dark:text-white">
                     1 {c} = {referenceRate(c)?.toFixed(2) ?? '—'} TSh
                   </p>
-                  {c !== 'TL' && (
-                    <p className="text-xs text-slate-400">
-                      (1 {c} = {rates.rates[c].tlPerUnit?.toFixed(4) ?? '—'} TL, used for anchor conversion)
-                    </p>
-                  )}
                 </div>
               ))}
             </div>

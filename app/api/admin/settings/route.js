@@ -15,7 +15,7 @@ export async function GET() {
 }
 
 const ALLOWED_FIELDS = [
-  'buyMarginTlTsh', 'marginTlTsh', 'deliveryFeeTl',
+  'marginPercent', 'deliveryFeeTl',
   'whatsappNumber', 'paymentDetails', 'displayName',
 ];
 
@@ -29,14 +29,9 @@ const ALLOWED_FIELDS = [
 function validateNumericFields(body) {
   const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
-  if (body.buyMarginTlTsh !== undefined) {
-    if (!isFiniteNumber(body.buyMarginTlTsh) || body.buyMarginTlTsh < 0) {
-      return 'Buy margin (TSh) must be a number of at least 0';
-    }
-  }
-  if (body.marginTlTsh !== undefined) {
-    if (!isFiniteNumber(body.marginTlTsh) || body.marginTlTsh < 0) {
-      return 'TL margin must be a number of at least 0';
+  if (body.marginPercent !== undefined) {
+    if (!isFiniteNumber(body.marginPercent) || body.marginPercent < 0 || body.marginPercent >= 100) {
+      return 'Commission (%) must be a number between 0 and 99';
     }
   }
   if (body.deliveryFeeTl !== undefined) {

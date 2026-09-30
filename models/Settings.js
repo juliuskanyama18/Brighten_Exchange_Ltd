@@ -1,20 +1,14 @@
 import mongoose from 'mongoose';
 
 const SettingsSchema = new mongoose.Schema({
-  // --- Margin (TL-anchored buy/sell spread) ---
-  // There is NO manually-set anchor anymore (removed 2026-09-25, per business
-  // decision — see git history). TL's live reference rate (an implied
-  // TRY->TZS cross-rate, see lib/rates.js) is marked up/down by TL's own
-  // margin FIRST, and that becomes the anchor every OTHER currency's price
-  // is derived from (2026-09-25: switched from each currency independently
-  // marking up its own live reference — see lib/calc.js for the full
-  // explanation, including why this makes the sell margin for USD/EUR/GBP
-  // move with TL's live rate instead of staying a fixed percentage):
-  //   TL sell anchor = TL reference + marginTlTsh       (flat TSh)
-  //   TL buy anchor  = TL reference - buyMarginTlTsh    (flat TSh)
-  //   USD/EUR/GBP sell/buy = (TL sell/buy anchor) * tlPerUnit(currency)
-  buyMarginTlTsh: { type: Number, default: 3, min: 0 }, // used to build the TL buy anchor (flat TSh, not %); ALL currencies inherit it
-  marginTlTsh:    { type: Number, default: 5, min: 0 }, // used to build the TL sell anchor; ALL currencies inherit it
+  // --- Commission (flat % on each currency's own live rate) ---
+  // There is NO anchor currency anymore (removed 2026-09-30, per business
+  // decision for a low-volume operation — see git history for the prior
+  // TL-anchored flat-TSh model). A single commission percentage is applied
+  // directly to every currency's own live reference rate:
+  //   sellRate(X) = liveRate(X) * (1 + marginPercent/100)
+  //   buyRate(X)  = liveRate(X) * (1 - marginPercent/100)
+  marginPercent: { type: Number, default: 5, min: 0, max: 99 },
 
   // --- Delivery Fee ---
   // Optional, opt-in per transaction (client checks "needs delivery"). A
