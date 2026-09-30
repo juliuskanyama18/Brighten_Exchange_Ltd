@@ -95,9 +95,9 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
         {/* Summary card */}
         <div className="bg-gradient-to-br from-brand-800 to-brand-950 border border-gold-500/30 rounded-2xl p-6 text-white">
           <div className="flex flex-col sm:flex-row items-center sm:justify-between gap-4 sm:gap-2">
-            {/* Client Sends */}
+            {/* You Give */}
             <div className="text-center min-w-0 w-full sm:w-auto">
-              <p className="text-gold-300 text-xs uppercase tracking-wide mb-1">Client Sends</p>
+              <p className="text-gold-300 text-xs uppercase tracking-wide mb-1">You Give</p>
               <p className="text-2xl sm:text-3xl font-bold break-words">{formatAmount(sendAmount, fromCurrency)}</p>
               <p className="text-gold-300 text-sm mt-1">
                 {currencyFlag(fromCurrency)} {currencyDisplayLabel(fromCurrency)}
@@ -113,9 +113,9 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
               </div>
             </div>
 
-            {/* Exchanger Gives */}
+            {/* You Get */}
             <div className="text-center min-w-0 w-full sm:w-auto">
-              <p className="text-gold-300 text-xs uppercase tracking-wide mb-1">Exchanger Gives</p>
+              <p className="text-gold-300 text-xs uppercase tracking-wide mb-1">You Get</p>
               <p className="text-2xl sm:text-3xl font-bold break-words">{formatAmount(receiveAmount, toCurrency)}</p>
               <p className="text-gold-300 text-sm mt-1">
                 {currencyFlag(toCurrency)} {currencyDisplayLabel(toCurrency)}
@@ -234,7 +234,7 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
     return (
       <div className="animate-slide-up space-y-5">
         <div className="text-center">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Client Sends Payment</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Send Your Payment</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Ref: <span className="font-mono font-bold text-brand-700 dark:text-gold-400">{reference}</span>
           </p>
@@ -251,7 +251,7 @@ export default function QuoteConfirmation({ quote, paymentDetails, onBack, onRes
         ) : (
           <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-center">
             <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-              Client sends {formatAmount(sendAmount, fromCurrency)} {currencyDisplayLabel(fromCurrency)}
+              You give {formatAmount(sendAmount, fromCurrency)} {currencyDisplayLabel(fromCurrency)}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
               Contact the exchanger on WhatsApp to arrange where to send it. The reference is{' '}

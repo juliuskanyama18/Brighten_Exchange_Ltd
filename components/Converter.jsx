@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import CurrencySelector from './CurrencySelector';
 import QuoteConfirmation from './QuoteConfirmation';
-import { formatAmount, currencyFlag, currencyDisplayLabel, formatNumberInput } from '@/utils/formatting';
+import { formatAmount, formatNumberInput } from '@/utils/formatting';
 
 const FOREIGN_CURRENCIES = ['TL', 'USD', 'EUR', 'GBP'];
 
@@ -27,10 +27,6 @@ function RatesFooter({ ratesInfo }) {
   );
 }
 
-// This interface is used by BOTH the client (self-service) and the exchanger
-// (operating it on the client's behalf during an in-person transaction) — so
-// labels always name the role ("Client Sends" / "Exchanger Gives") instead of
-// "I"/"You", which would mean different things depending on who's typing.
 function DeliveryCheckbox({ checked, onChange, feeTl }) {
   return (
     <label className="flex items-center gap-2 px-1 text-sm text-slate-600 dark:text-slate-300 cursor-pointer select-none">
@@ -40,36 +36,45 @@ function DeliveryCheckbox({ checked, onChange, feeTl }) {
         onChange={(e) => onChange(e.target.checked)}
         className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-gold-500 focus:ring-gold-500"
       />
-      Client needs delivery {feeTl ? `(−${feeTl} TL worth deducted)` : ''}
+      Include delivery {feeTl ? `(−${feeTl} TL worth deducted)` : ''}
     </label>
   );
 }
 
+// A fixed, non-editable badge for whichever side currently holds TZS —
+// TZS is never a user choice (this business always trades against it).
+function TzsBadge() {
+  return (
+    <div className="shrink-0 flex items-center gap-1.5 px-3.5 py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-sm font-bold text-slate-700 dark:text-slate-200">
+      🇹🇿 TZS
+    </div>
+  );
+}
+
+// Everyone already knows how to use a currency converter: a "You Give" box,
+// a "You Get" box, and a swap button — no tabs, no "send"/"want" labels
+// that can be misread as a remittance (sending money to someone else)
+// instead of what it actually is (handing currency to the exchanger).
+// `tzsSide` says which box currently holds TZS; the swap button flips it.
 export default function Converter({ paymentDetails }) {
-  const [tab, setTab] = useState('send'); // 'send' = client sends TSh, 'want' = client wants TSh
+  const [tzsSide, setTzsSide] = useState('give'); // 'give' = you hand over TZS, 'get' = you hand over foreign currency
+  const [foreignCurrency, setForeignCurrency] = useState('USD');
+  const [amount, setAmount] = useState('');
+  // Only meaningful when tzsSide === 'get': false = you type the foreign
+  // amount you're handing over; true = you type the exact TZS you need,
+  // and we solve for how much foreign currency to collect instead.
+  const [targetMode, setTargetMode] = useState(false);
+
   const [ratesInfo, setRatesInfo] = useState(null);
   const [quote, setQuote] = useState(null);
   const [needsDelivery, setNeedsDelivery] = useState(false);
   const [deliveryFeeTl, setDeliveryFeeTl] = useState(null);
-  // Rate transparency + disclaimer are collapsed by default so the core
-  // calculator fits on a phone screen without scrolling — still one tap away.
   const [showInfo, setShowInfo] = useState(false);
 
-  // ---- Tab 1: Client sends TSh ----
-  const [tshAmount, setTshAmount] = useState('');
-  const [sendQuote, setSendQuote] = useState(null); // full /api/quote response
-  const [sendLoading, setSendLoading] = useState(false);
-  const [sendError, setSendError] = useState('');
-
-  // ---- Tab 2: Client wants TSh ----
-  // mode 'given'  = client hands over a known amount, we compute the TSh they get
-  // mode 'target' = client needs an EXACT TSh amount, we compute what to collect
-  const [wantMode, setWantMode] = useState('given');
-  const [wantCurrency, setWantCurrency] = useState('USD');
-  const [wantAmount, setWantAmount] = useState('');
-  const [wantResult, setWantResult] = useState(null); // full /api/quote response
-  const [wantLoading, setWantLoading] = useState(false);
-  const [wantError, setWantError] = useState('');
+  const [sendQuote, setSendQuote] = useState(null); // tzsSide 'give': full /api/quote response (all 4 currencies)
+  const [wantResult, setWantResult] = useState(null); // tzsSide 'get': full /api/quote response
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const debounceRef = useRef(null);
 
@@ -86,94 +91,105 @@ export default function Converter({ paymentDetails }) {
     }).catch(() => {});
   }, []);
 
-  const fetchSendQuote = useCallback(async (amount, delivery) => {
-    const clean = amount.replace(/,/g, '');
+  const fetchSendQuote = useCallback(async (amt, delivery) => {
+    const clean = amt.replace(/,/g, '');
     if (!clean || parseFloat(clean) <= 0) {
       setSendQuote(null);
       return;
     }
-    setSendLoading(true);
-    setSendError('');
+    setLoading(true);
+    setError('');
     try {
       const { data } = await axios.post('/api/quote', { direction: 'send_tsh', amount: clean, needsDelivery: delivery });
       if (data.success) {
         setSendQuote(data);
       } else {
-        setSendError(data.error || 'Could not calculate quote');
+        setError(data.error || 'Could not calculate quote');
         setSendQuote(null);
       }
     } catch (err) {
-      setSendError(err.response?.data?.error || 'Could not get rate. Check connection.');
+      setError(err.response?.data?.error || 'Could not get rate. Check connection.');
       setSendQuote(null);
     } finally {
-      setSendLoading(false);
+      setLoading(false);
     }
   }, []);
 
-  const fetchWantQuote = useCallback(async (currency, amount, delivery, mode) => {
-    const clean = amount.replace(/,/g, '');
+  const fetchWantQuote = useCallback(async (currency, amt, delivery, mode) => {
+    const clean = amt.replace(/,/g, '');
     if (!clean || parseFloat(clean) <= 0) {
       setWantResult(null);
       return;
     }
-    setWantLoading(true);
-    setWantError('');
+    setLoading(true);
+    setError('');
     try {
       const { data } = await axios.post('/api/quote', { direction: 'want_tsh', currency, amount: clean, needsDelivery: delivery, mode });
       if (data.success) {
         setWantResult(data);
       } else {
-        setWantError(data.error || 'Could not calculate quote');
+        setError(data.error || 'Could not calculate quote');
         setWantResult(null);
       }
     } catch (err) {
-      setWantError(err.response?.data?.error || 'Could not get rate. Check connection.');
+      setError(err.response?.data?.error || 'Could not get rate. Check connection.');
       setWantResult(null);
     } finally {
-      setWantLoading(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
-    if (tab === 'send') {
-      debounceRef.current = setTimeout(() => fetchSendQuote(tshAmount, needsDelivery), 500);
+    if (tzsSide === 'give') {
+      debounceRef.current = setTimeout(() => fetchSendQuote(amount, needsDelivery), 500);
     } else {
-      debounceRef.current = setTimeout(() => fetchWantQuote(wantCurrency, wantAmount, needsDelivery, wantMode), 500);
+      debounceRef.current = setTimeout(() => fetchWantQuote(foreignCurrency, amount, needsDelivery, targetMode ? 'target' : 'given'), 500);
     }
     return () => clearTimeout(debounceRef.current);
-  }, [tab, tshAmount, wantCurrency, wantAmount, needsDelivery, wantMode, fetchSendQuote, fetchWantQuote]);
+  }, [tzsSide, amount, foreignCurrency, needsDelivery, targetMode, fetchSendQuote, fetchWantQuote]);
 
-  const handleSwitchTab = (next) => {
-    setTab(next);
-    setSendError('');
-    setWantError('');
+  const handleSwap = () => {
+    setTzsSide((s) => (s === 'give' ? 'get' : 'give'));
+    setTargetMode(false);
+    setAmount('');
+    setSendQuote(null);
+    setWantResult(null);
+    setError('');
   };
 
-  const handleGetQuoteSend = (currency) => {
-    const netAmount = sendQuote?.results?.[currency];
-    if (netAmount === null || netAmount === undefined) return;
-    const grossAmount = (sendQuote.grossResults ?? sendQuote.results)[currency];
-    const tshAmountNum = parseFloat(tshAmount.replace(/,/g, ''));
-    setQuote({
-      direction: 'send_tsh',
-      fromCurrency: 'TZS',
-      toCurrency: currency,
-      sendAmount: tshAmountNum,
-      receiveAmount: netAmount,
-      rateUsed: tshAmountNum / grossAmount, // pure sell rate, unaffected by delivery fee
-      needsDelivery: sendQuote.needsDelivery,
-      grossAmount,
-      deliveryFeeAmount: sendQuote.deliveryFees?.[currency] ?? 0,
-    });
+  const handleToggleTargetMode = () => {
+    setTargetMode((v) => !v);
+    setAmount('');
+    setWantResult(null);
+    setError('');
   };
 
-  const handleGetQuoteWant = () => {
+  const handleGetQuote = () => {
+    if (tzsSide === 'give') {
+      const netAmount = sendQuote?.results?.[foreignCurrency];
+      if (netAmount === null || netAmount === undefined) return;
+      const grossAmount = (sendQuote.grossResults ?? sendQuote.results)[foreignCurrency];
+      const tshAmountNum = parseFloat(amount.replace(/,/g, ''));
+      setQuote({
+        direction: 'send_tsh',
+        fromCurrency: 'TZS',
+        toCurrency: foreignCurrency,
+        sendAmount: tshAmountNum,
+        receiveAmount: netAmount,
+        rateUsed: tshAmountNum / grossAmount, // pure sell rate, unaffected by delivery fee
+        needsDelivery: sendQuote.needsDelivery,
+        grossAmount,
+        deliveryFeeAmount: sendQuote.deliveryFees?.[foreignCurrency] ?? 0,
+      });
+      return;
+    }
+
     if (!wantResult) return;
     if (wantResult.mode === 'target') {
       setQuote({
         direction: 'want_tsh',
-        fromCurrency: wantCurrency,
+        fromCurrency: foreignCurrency,
         toCurrency: 'TZS',
         sendAmount: wantResult.requiredAmount,
         receiveAmount: wantResult.targetTsh,
@@ -186,9 +202,9 @@ export default function Converter({ paymentDetails }) {
     }
     setQuote({
       direction: 'want_tsh',
-      fromCurrency: wantCurrency,
+      fromCurrency: foreignCurrency,
       toCurrency: 'TZS',
-      sendAmount: parseFloat(wantAmount.replace(/,/g, '')),
+      sendAmount: parseFloat(amount.replace(/,/g, '')),
       receiveAmount: wantResult.finalTsh,
       rateUsed: wantResult.buyRate,
       needsDelivery: wantResult.needsDelivery,
@@ -199,17 +215,9 @@ export default function Converter({ paymentDetails }) {
 
   const handleReset = () => {
     setQuote(null);
-    setTshAmount('');
+    setAmount('');
     setSendQuote(null);
-    setWantAmount('');
     setWantResult(null);
-  };
-
-  const handleSwitchWantMode = (nextMode) => {
-    setWantMode(nextMode);
-    setWantAmount('');
-    setWantResult(null);
-    setWantError('');
   };
 
   if (quote) {
@@ -223,279 +231,147 @@ export default function Converter({ paymentDetails }) {
     );
   }
 
+  // Which box is the editable input right now, and what computed value (if
+  // any) the other box should display.
+  const inputSide = tzsSide === 'get' && targetMode ? 'get' : 'give';
+  let computedForeign = null; // shown in the foreign box when it's read-only
+  let computedTsh = null;     // shown in the TZS box when it's read-only
+  let canGetQuote = false;
+
+  if (tzsSide === 'give') {
+    computedForeign = sendQuote?.results?.[foreignCurrency] ?? null;
+    canGetQuote = computedForeign !== null && computedForeign !== undefined;
+  } else if (!targetMode) {
+    computedTsh = wantResult?.mode === 'given' ? wantResult.finalTsh : null;
+    canGetQuote = computedTsh !== null && computedTsh !== undefined;
+  } else {
+    computedForeign = wantResult?.mode === 'target' ? wantResult.requiredAmount : null;
+    canGetQuote = computedForeign !== null && computedForeign !== undefined;
+  }
+
+  const giveCurrency = tzsSide === 'give' ? 'TZS' : foreignCurrency;
+  const getCurrency = tzsSide === 'give' ? foreignCurrency : 'TZS';
+
+  const Spinner = (
+    <div className="flex items-center gap-2 text-slate-400 text-sm">
+      <svg className="animate-spin w-4 h-4 text-gold-500" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      Calculating…
+    </div>
+  );
+
   return (
     <div className="space-y-3.5">
-      {/* Tabs */}
-      <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+      {/* You Give */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+          You Give
+        </label>
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              {inputSide === 'give' ? (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(formatNumberInput(e.target.value))}
+                  placeholder="0"
+                  className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
+                />
+              ) : loading ? Spinner : (
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words">
+                  {computedForeign !== null ? formatAmount(computedForeign, foreignCurrency) : '0'}
+                </p>
+              )}
+            </div>
+            {giveCurrency === 'TZS' ? <TzsBadge /> : (
+              <div className="w-32 sm:w-36 shrink-0">
+                <CurrencySelector value={foreignCurrency} onChange={setForeignCurrency} currencies={FOREIGN_CURRENCIES} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Swap */}
+      <div className="flex justify-center -my-1.5 relative z-10">
         <button
-          onClick={() => handleSwitchTab('send')}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-            tab === 'send'
-              ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
+          type="button"
+          onClick={handleSwap}
+          aria-label="Swap direction"
+          className="w-9 h-9 rounded-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-900 shadow-md flex items-center justify-center text-slate-500 dark:text-slate-300 hover:text-gold-500 hover:border-gold-200 transition-colors"
         >
-          Client Sends TSh
-        </button>
-        <button
-          onClick={() => handleSwitchTab('want')}
-          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
-            tab === 'want'
-              ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          Client Wants TSh
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 4v12m0 0l4-4m-4 4l-4-4" />
+          </svg>
         </button>
       </div>
-      <p className="text-center text-xs text-slate-500 dark:text-slate-400 -mt-2">
-        {tab === 'send'
-          ? 'Client has Tanzanian Shillings, exchanger gives TL, USD, EUR or GBP'
-          : 'Client has TL, USD, EUR or GBP, exchanger gives Tanzanian Shillings'}
-      </p>
 
-      {tab === 'send' ? (
-        <div className="space-y-3.5">
-          {/* Client Sends */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              Client Sends
-            </label>
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={tshAmount}
-                    onChange={(e) => setTshAmount(formatNumberInput(e.target.value))}
-                    placeholder="0"
-                    className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">{currencyFlag('TZS')} TSh (Tanzanian Shilling)</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
-
-          {/* Exchanger Gives — all four at once */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              Exchanger Gives
-            </label>
-            {sendLoading ? (
-              <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-sm">
-                <svg className="animate-spin w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                </svg>
-                Calculating…
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {FOREIGN_CURRENCIES.map((c) => {
-                  const amount = sendQuote?.results?.[c];
-                  return (
-                    <div
-                      key={c}
-                      className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs text-slate-400">{currencyFlag(c)} {c}</p>
-                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 break-words">
-                          {amount !== null && amount !== undefined ? formatAmount(amount, c) : '—'}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleGetQuoteSend(c)}
-                        disabled={amount === null || amount === undefined}
-                        className="shrink-0 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 text-brand-950 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Get Quote →
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {sendError && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400 text-center">
-              {sendError}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3.5">
-          {/* Given vs Target mode */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => handleSwitchWantMode('given')}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 ${
-                wantMode === 'given'
-                  ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              Client Gives an Amount
-            </button>
-            <button
-              onClick={() => handleSwitchWantMode('target')}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all duration-200 ${
-                wantMode === 'target'
-                  ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-gold-400 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              Client Needs Exact TSh
-            </button>
-          </div>
-
-          {wantMode === 'given' ? (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                Client Sends
-              </label>
-              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={wantAmount}
-                      onChange={(e) => setWantAmount(formatNumberInput(e.target.value))}
-                      placeholder="0.00"
-                      className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
-                    />
-                  </div>
-                  <div className="w-32 sm:w-36 shrink-0">
-                    <CurrencySelector
-                      value={wantCurrency}
-                      onChange={setWantCurrency}
-                      currencies={FOREIGN_CURRENCIES}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Client Needs (TSh)
-                </label>
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={wantAmount}
-                    onChange={(e) => setWantAmount(formatNumberInput(e.target.value))}
-                    placeholder="0"
-                    className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">{currencyFlag('TZS')} exact TSh the client walks away with</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  Collect Payment In
-                </label>
-                <CurrencySelector
-                  value={wantCurrency}
-                  onChange={setWantCurrency}
-                  currencies={FOREIGN_CURRENCIES}
+      {/* You Get */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+          You Get
+        </label>
+        <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 focus-within:ring-2 focus-within:ring-gold-500 transition-shadow">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              {inputSide === 'get' ? (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(formatNumberInput(e.target.value))}
+                  placeholder="0"
+                  className="w-full text-2xl font-bold bg-transparent text-slate-900 dark:text-white outline-none placeholder-slate-300 dark:placeholder-slate-600"
                 />
-              </div>
+              ) : loading ? Spinner : (
+                <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 break-words">
+                  {getCurrency === 'TZS'
+                    ? (computedTsh !== null ? formatAmount(computedTsh, 'TZS') : '0')
+                    : (computedForeign !== null ? formatAmount(computedForeign, foreignCurrency) : '0')}
+                </p>
+              )}
             </div>
-          )}
-
-          <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
-
-          {/* Result */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-              {wantMode === 'given' ? 'Exchanger Gives' : 'Collect From Client'}
-            </label>
-            {wantLoading ? (
-              <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-sm">
-                <svg className="animate-spin w-5 h-5 text-gold-500" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                </svg>
-                Calculating…
+            {getCurrency === 'TZS' ? <TzsBadge /> : (
+              <div className="w-32 sm:w-36 shrink-0">
+                <CurrencySelector value={foreignCurrency} onChange={setForeignCurrency} currencies={FOREIGN_CURRENCIES} />
               </div>
-            ) : wantResult && wantResult.mode === 'target' ? (
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Our rate</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    1 {currencyDisplayLabel(wantCurrency)} = {formatAmount(wantResult.buyRate, 'TZS')}
-                  </span>
-                </div>
-                {wantResult.needsDelivery && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Includes delivery fee</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">+{formatAmount(wantResult.deliveryFeeTsh, 'TZS')} worth</span>
-                  </div>
-                )}
-                <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
-                <div className="flex justify-between">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Collect</span>
-                  <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                    {formatAmount(wantResult.requiredAmount, wantCurrency)}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400">so the client nets exactly {formatAmount(wantResult.targetTsh, 'TZS')}</p>
-              </div>
-            ) : wantResult ? (
-              <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-3.5 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Our rate</span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    1 {currencyDisplayLabel(wantCurrency)} = {formatAmount(wantResult.buyRate, 'TZS')}
-                  </span>
-                </div>
-                {wantResult.needsDelivery && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Gross</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">{formatAmount(wantResult.grossTsh, 'TZS')}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">− Delivery fee</span>
-                      <span className="font-semibold text-red-500">−{formatAmount(wantResult.deliveryFeeTsh, 'TZS')}</span>
-                    </div>
-                  </>
-                )}
-                <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
-                <div className="flex justify-between">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Exchanger gives</span>
-                  <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatAmount(wantResult.finalTsh, 'TZS')}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-2xl font-bold text-slate-300 dark:text-slate-600 py-2">0 TSh</p>
             )}
           </div>
+        </div>
+      </div>
 
-          {wantError && (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400 text-center">
-              {wantError}
-            </div>
-          )}
+      {/* Exact-amount toggle — only relevant when you're handing over foreign
+          currency and want to specify the TZS side instead (e.g. the
+          exchanger already knows the client needs exactly 270,000 TZS). */}
+      {tzsSide === 'get' && (
+        <button
+          type="button"
+          onClick={handleToggleTargetMode}
+          className="block w-full text-center text-xs text-slate-400 dark:text-slate-500 underline underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
+        >
+          {targetMode ? '← Type the amount you\'re giving instead' : 'Need to receive an exact TZS amount instead? →'}
+        </button>
+      )}
 
-          <button
-            onClick={handleGetQuoteWant}
-            disabled={!wantResult || wantLoading}
-            className="w-full py-3.5 rounded-2xl text-base font-bold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 active:from-gold-600 active:to-gold-800 text-brand-950 shadow-lg shadow-gold-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-          >
-            Get Quote →
-          </button>
+      <DeliveryCheckbox checked={needsDelivery} onChange={setNeedsDelivery} feeTl={deliveryFeeTl} />
+
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400 text-center">
+          {error}
         </div>
       )}
+
+      <button
+        onClick={handleGetQuote}
+        disabled={!canGetQuote || loading}
+        className="w-full py-3.5 rounded-2xl text-base font-bold bg-gradient-to-r from-gold-400 to-gold-600 hover:from-gold-500 hover:to-gold-700 active:from-gold-600 active:to-gold-800 text-brand-950 shadow-lg shadow-gold-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+      >
+        Get Quote →
+      </button>
 
       <div className="text-center">
         <button
